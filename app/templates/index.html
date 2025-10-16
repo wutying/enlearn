@@ -1,0 +1,188 @@
+{% extends "base.html" %}
+{% block title %}新增單字｜隨身單字本{% endblock %}
+{% block content %}
+<section class="card">
+  <h2>快速新增單字</h2>
+  <form method="post" action="{{ url_for('add_entry_route') }}" class="form-grid">
+    <label>
+      單字 / 片語
+      <input type="text" name="word" placeholder="ex: serendipity" required />
+      <small class="input-hint">輸入後會自動查詢並帶入翻譯。</small>
+    </label>
+    <label>
+      解釋或翻譯
+      <textarea name="definition" rows="3" placeholder="ex: 意外得到的驚喜收穫" required></textarea>
+      <small id="lookup-status" class="lookup-status" aria-live="polite"></small>
+    </label>
+    <label>
+      情境或例句（選填）
+      <textarea name="context" rows="3" placeholder="ex: Finding the café was pure serendipity."></textarea>
+    </label>
+    <button type="submit" class="btn-primary">加入單字</button>
+  </form>
+</section>
+
+<section class="card">
+  <h2>單字列表</h2>
+  <p>今日待複習：<strong>{{ due_count }}</strong> 個單字。</p>
+  <p class="storage-hint">資料會儲存在 <code>{{ storage_path }}</code>，方便備份或同步。</p>
+  {% if entries %}
+    <table class="entries">
+      <thead>
+        <tr>
+          <th>單字</th>
+          <th>解釋</th>
+          <th>下一次複習</th>
+          <th>連勝</th>
+          <th>複習次數</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for entry in entries %}
+          <tr>
+            <td>{{ entry.word }}</td>
+            <td>{{ entry.definition }}</td>
+            <td>{{ entry.next_review }}</td>
+            <td>{{ entry.success_streak }}</td>
+            <td>{{ entry.review_count }}</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% else %}
+    <p>還沒有單字，趕快新增一個吧！</p>
+  {% endif %}
+</section>
+{% endblock %}
+
+{% block extra_scripts %}
+  <script>
+    (function () {
+      const wordInput = document.querySelector('input[name="word"]');
+      const defInput = document.querySelector('textarea[name="definition"]');
+      const statusEl = document.getElementById('lookup-status');
+
+      if (!wordInput || !defInput || !statusEl) {
+        return;
+      }
+
+      let definitionManuallyEdited = false;
+      let manualEditWord = '';
+      let lookupDelay = null;
+      let activeController = null;
+
+      const setStatus = (message, state) => {
+        statusEl.textContent = message;
+        statusEl.dataset.state = state;
+      };
+
+      const cancelLookup = () => {
+        if (lookupDelay) {
+          clearTimeout(lookupDelay);
+          lookupDelay = null;
+        }
+        if (activeController) {
+          activeController.abort();
+          activeController = null;
+        }
+      };
+
+      const scheduleLookup = (word) => {
+        cancelLookup();
+        setStatus('查詢翻譯中…', 'loading');
+        lookupDelay = setTimeout(() => performLookup(word), 350);
+      };
+
+      const performLookup = async (word) => {
+        const controller = new AbortController();
+        activeController = controller;
+
+        try {
+          const response = await fetch(`/lookup?word=${encodeURIComponent(word)}`, {
+            signal: controller.signal,
+          });
+
+          if (!response.ok) {
+            throw new Error('lookup_failed');
+          }
+
+          const data = await response.json();
+
+          if (wordInput.value.trim() !== word) {
+            return;
+          }
+
+          if (data.status === 'ok' && data.translation) {
+            const shouldAutofill =
+              !definitionManuallyEdited ||
+              !defInput.value.trim() ||
+              defInput.dataset.autofillWord === word;
+
+            if (shouldAutofill) {
+              defInput.value = data.translation;
+              defInput.dataset.autofillWord = word;
+              definitionManuallyEdited = false;
+              manualEditWord = '';
+            }
+            setStatus('已自動帶入翻譯，可視需要調整。', 'success');
+          } else if (data.status === 'not_found') {
+            setStatus('找不到翻譯，請自行輸入。', 'warning');
+          } else {
+            setStatus('請輸入單字以查詢翻譯。', 'idle');
+          }
+        } catch (err) {
+          if (err.name === 'AbortError') {
+            return;
+          }
+          setStatus('查詢翻譯失敗，請稍後再試或自行輸入。', 'error');
+        } finally {
+          if (activeController === controller) {
+            activeController = null;
+          }
+        }
+      };
+
+      defInput.addEventListener('input', () => {
+        definitionManuallyEdited = true;
+        defInput.dataset.autofillWord = '';
+        manualEditWord = wordInput.value.trim();
+      });
+
+      wordInput.addEventListener('input', () => {
+        const word = wordInput.value.trim();
+
+        if (defInput.dataset.autofillWord && defInput.dataset.autofillWord !== word) {
+          defInput.value = '';
+          defInput.dataset.autofillWord = '';
+          definitionManuallyEdited = false;
+          manualEditWord = '';
+        } else if (
+          definitionManuallyEdited &&
+          manualEditWord &&
+          manualEditWord !== word &&
+          !manualEditWord.startsWith(word) &&
+          !word.startsWith(manualEditWord)
+        ) {
+          definitionManuallyEdited = false;
+          manualEditWord = '';
+          defInput.value = '';
+        }
+
+        if (!word) {
+          cancelLookup();
+          if (!definitionManuallyEdited) {
+            defInput.value = '';
+          }
+          manualEditWord = '';
+          setStatus('請輸入單字以查詢翻譯。', 'idle');
+          return;
+        }
+
+        scheduleLookup(word);
+      });
+
+      setStatus('輸入單字後會自動查詢翻譯。', 'idle');
+      defInput.dataset.autofillWord = '';
+    })();
+  </script>
+{% endblock %}
