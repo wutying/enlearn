@@ -68,6 +68,7 @@ def lookup_translation(word: str) -> Optional[str]:
 
     langpair = app.config.get("TRANSLATION_LANGPAIR", DEFAULT_TRANSLATION_LANGPAIR)
     params = {"q": sanitized, "langpair": langpair}
+    params = {"q": sanitized, "langpair": "auto|zh-TW"}
     url = f"{TRANSLATION_ENDPOINT}?{parse.urlencode(params)}"
     req = urlrequest.Request(
         url,
