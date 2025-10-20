@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{% block title %}隨身單字本{% endblock %}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}" />
+  </head>
+  <body>
+    <header class="app-header">
+      <h1><a href="{{ url_for('index') }}">隨身單字本</a></h1>
+      <nav>
+        <a href="{{ url_for('index') }}">新增單字</a>
+        <a href="{{ url_for('review') }}">開始複習</a>
+      </nav>
+    </header>
+
+    <main class="app-content">
+      {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+          <ul class="flash-messages">
+            {% for category, message in messages %}
+              <li class="flash-{{ category }}">{{ message }}</li>
+            {% endfor %}
+          </ul>
+        {% endif %}
+      {% endwith %}
+      {% block content %}{% endblock %}
+    </main>
+
+    <footer class="app-footer">
+      <p>資料儲存在：<code>{{ storage_path }}</code></p>
+    </footer>
+    {% block extra_scripts %}{% endblock %}
+  </body>
+</html>

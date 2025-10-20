@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% block title %}複習單字｜隨身單字本{% endblock %}
+{% block content %}
+<section class="card review-card">
+  <h2>複習模式</h2>
+  <p class="storage-hint">所有單字都保存在 <code>{{ storage_path }}</code>。</p>
+  <div class="review-mode-toggle" role="tablist" aria-label="切換複習模式">
+    <a
+      href="{{ url_for('review', mode='word-first') }}"
+      class="toggle-pill{% if mode == 'word-first' %} is-active{% endif %}"
+      role="tab"
+      aria-selected="{{ 'true' if mode == 'word-first' else 'false' }}"
+    >顯示單字猜解釋</a>
+    <a
+      href="{{ url_for('review', mode='definition-first') }}"
+      class="toggle-pill{% if mode == 'definition-first' %} is-active{% endif %}"
+      role="tab"
+      aria-selected="{{ 'true' if mode == 'definition-first' else 'false' }}"
+    >顯示解釋輸入單字</a>
+  </div>
+  {% if entry %}
+    <p>還有 <strong>{{ remaining }}</strong> 個單字待複習。</p>
+    {% if mode == 'word-first' %}
+      <div class="review-word">
+        <h3>{{ entry.word }}</h3>
+        {% if entry.context %}
+          <p class="context">{{ entry.context }}</p>
+        {% endif %}
+      </div>
+      <details class="definition">
+        <summary>顯示解釋</summary>
+        <p>{{ entry.definition }}</p>
+      </details>
+      <p class="review-meta">已複習 {{ entry.review_count }} 次，連勝 {{ entry.success_streak }}。</p>
+      <form method="post" action="{{ url_for('review_result', entry_id=entry.id) }}" class="review-actions">
+        <input type="hidden" name="mode" value="word-first" />
+        <button name="result" value="remembered" class="btn-primary">我記得</button>
+        <button name="result" value="forgot" class="btn-secondary">需要加強</button>
+      </form>
+    {% else %}
+      <div class="review-definition">
+        <h3>解釋 / 翻譯</h3>
+        <p>{{ entry.definition }}</p>
+        {% if entry.context %}
+          <p class="context">{{ entry.context }}</p>
+        {% endif %}
+      </div>
+      <p class="review-meta">已複習 {{ entry.review_count }} 次，請輸入對應的單字或片語。</p>
+      <form method="post" action="{{ url_for('review_result', entry_id=entry.id) }}" class="definition-first-form">
+        <input type="hidden" name="mode" value="definition-first" />
+        <label>
+          我的答案
+          <input type="text" name="answer" placeholder="輸入單字" required />
+        </label>
+        <button type="submit" class="btn-primary">送出答案</button>
+      </form>
+    {% endif %}
+    <form method="post" action="{{ url_for('review_skip', entry_id=entry.id) }}" class="review-actions">
+      <input type="hidden" name="mode" value="{{ mode }}" />
+      <button type="submit" class="btn-link">先跳過</button>
+    </form>
+  {% else %}
+    <p>目前沒有需要複習的單字，太棒了！</p>
+    <a class="btn-primary" href="{{ url_for('index') }}">回去新增更多單字</a>
+  {% endif %}
+</section>
+{% endblock %}
