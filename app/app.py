@@ -4,8 +4,9 @@ from __future__ import annotations
 import functools
 import json
 import os
+import re
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Tuple
 from urllib import error, parse, request as urlrequest
 
 from flask import (
@@ -34,6 +35,10 @@ app.config["SECRET_KEY"] = "enlearn-secret-key"  # Needed for flashing messages
 TRANSLATION_ENDPOINT = "https://api.mymemory.translated.net/get"
 TRANSLATION_TIMEOUT = 6  # seconds
 DEFAULT_TRANSLATION_LANGPAIR = "EN|ZH-TW"
+# Accept ISO-639 two/three letter language codes with an optional region/script
+# segment (e.g. ``EN``, ``EN-US``, ``ZH-TW``, ``SR-LATN``). Wider values such as
+# ``AUTO`` are rejected so we can gracefully fall back to the safe default.
+_LANG_CODE_RE = re.compile(r"^[A-Za-z]{2,3}(?:-[A-Za-z0-9]{2,8})?$")
 
 
 app.config["TRANSLATION_LANGPAIR"] = os.environ.get(
@@ -58,17 +63,43 @@ def _normalize_translation(raw: Optional[str], original: str) -> Optional[str]:
     return cleaned
 
 
-@functools.lru_cache(maxsize=256)
-def lookup_translation(word: str) -> Optional[str]:
-    """Fetch a translation for ``word`` from the external API."""
-
-    sanitized = word.strip()
-    if not sanitized:
+def _sanitize_lang_code(code: str) -> Optional[str]:
+    code = code.strip()
+    if not code:
         return None
 
-    langpair = app.config.get("TRANSLATION_LANGPAIR", DEFAULT_TRANSLATION_LANGPAIR)
-    params = {"q": sanitized, "langpair": langpair}
-    params = {"q": sanitized, "langpair": "auto|zh-TW"}
+    match = _LANG_CODE_RE.match(code)
+    if not match:
+        return None
+
+    primary, _, rest = code.partition("-")
+    primary = primary.upper()
+    # ``_LANG_CODE_RE`` already guarantees 2-3 characters for the primary tag,
+    # but we keep the explicit guard to make the intent obvious and future-
+    # proof the check should the regex change.
+    if len(primary) not in (2, 3):
+        return None
+
+    if not rest:
+        return primary
+
+    return f"{primary}-{rest.upper()}"
+
+
+def _resolve_langpair() -> str:
+    raw = str(app.config.get("TRANSLATION_LANGPAIR", DEFAULT_TRANSLATION_LANGPAIR))
+    segments = raw.split("|")
+    if len(segments) != 2:
+        return DEFAULT_TRANSLATION_LANGPAIR
+    source = _sanitize_lang_code(segments[0])
+    target = _sanitize_lang_code(segments[1])
+    if not source or not target:
+        return DEFAULT_TRANSLATION_LANGPAIR
+    return f"{source}|{target}"
+
+
+def _fetch_translation_payload(word: str, langpair: str) -> Tuple[Optional[dict], Optional[str]]:
+    params = {"q": word, "langpair": langpair}
     url = f"{TRANSLATION_ENDPOINT}?{parse.urlencode(params)}"
     req = urlrequest.Request(
         url,
@@ -79,32 +110,67 @@ def lookup_translation(word: str) -> Optional[str]:
         with urlrequest.urlopen(req, timeout=TRANSLATION_TIMEOUT) as resp:
             payload = resp.read()
     except (error.URLError, TimeoutError, ValueError, OSError):
-        return None
+        return None, None
 
     try:
         data = json.loads(payload)
     except json.JSONDecodeError:
-        return None
+        return None, None
 
     if isinstance(data, dict):
-        # Primary response field
-        translation = _normalize_translation(
-            data.get("responseData", {}).get("translatedText"), sanitized
-        )
+        status = data.get("responseStatus")
+        if isinstance(status, int) and status != 200:
+            details = data.get("responseDetails")
+            return data, str(details) if details else None
+        return data, None
+    return None, None
+
+
+def _extract_translation(data: dict, original: str) -> Optional[str]:
+    translation = _normalize_translation(
+        data.get("responseData", {}).get("translatedText"), original
+    )
+    if translation:
+        return translation
+
+    matches = data.get("matches")
+    if isinstance(matches, list):
+        for match in matches:
+            if not isinstance(match, dict):
+                continue
+            translation = _normalize_translation(match.get("translation"), original)
+            if translation:
+                return translation
+    return None
+
+
+def _should_retry_with_default(details: Optional[str]) -> bool:
+    if not details:
+        return False
+    normalized = details.upper()
+    return "INVALID SOURCE LANGUAGE" in normalized or "LANGPAIR" in normalized
+
+
+@functools.lru_cache(maxsize=256)
+def lookup_translation(word: str) -> Optional[str]:
+    """Fetch a translation for ``word`` from the external API."""
+
+    sanitized = word.strip()
+    if not sanitized:
+        return None
+
+    langpair = _resolve_langpair()
+    data, details = _fetch_translation_payload(sanitized, langpair)
+    if data:
+        translation = _extract_translation(data, sanitized)
         if translation:
             return translation
 
-        # Occasionally there are matches in the response details; pick the first hit
-        matches = data.get("matches")
-        if isinstance(matches, list):
-            for match in matches:
-                if not isinstance(match, dict):
-                    continue
-                translation = _normalize_translation(
-                    match.get("translation"), sanitized
-                )
-                if translation:
-                    return translation
+    if _should_retry_with_default(details) and langpair != DEFAULT_TRANSLATION_LANGPAIR:
+        fallback_data, _ = _fetch_translation_payload(sanitized, DEFAULT_TRANSLATION_LANGPAIR)
+        if fallback_data:
+            return _extract_translation(fallback_data, sanitized)
+
     return None
 
 

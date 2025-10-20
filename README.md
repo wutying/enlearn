@@ -92,6 +92,8 @@ This project gives you a **隨身單字本** that works both as a friendly web a
      $env:TRANSLATION_LANGPAIR="EN|JA"  # 立即生效
      ```
 
+   > 語言代碼需為 2～3 個英文字母，可選擇性加上連字號與地區（如 `EN`、`EN-US`、`ZH-TW`、`SR-LATN`）。如果輸入的語言代碼不符合 API 的格式（例如出現 `AUTO`），系統會自動改用預設的 `EN|ZH-TW`，確保翻譯查詢仍能成功。
+
 6. **啟動伺服器**：
 
    ```bash
