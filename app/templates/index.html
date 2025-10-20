@@ -66,6 +66,15 @@
         return;
       }
 
+      const focusWordInput = () => {
+        wordInput.focus();
+        if (typeof wordInput.select === 'function') {
+          wordInput.select();
+        }
+      };
+
+      focusWordInput();
+
       let definitionManuallyEdited = false;
       let manualEditWord = '';
       let lookupDelay = null;
