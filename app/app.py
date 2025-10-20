@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import functools
 import json
+import os
 from pathlib import Path
 from typing import Optional
 from urllib import error, parse, request as urlrequest
@@ -32,6 +33,12 @@ app.config["SECRET_KEY"] = "enlearn-secret-key"  # Needed for flashing messages
 
 TRANSLATION_ENDPOINT = "https://api.mymemory.translated.net/get"
 TRANSLATION_TIMEOUT = 6  # seconds
+DEFAULT_TRANSLATION_LANGPAIR = "EN|ZH-TW"
+
+
+app.config["TRANSLATION_LANGPAIR"] = os.environ.get(
+    "TRANSLATION_LANGPAIR", DEFAULT_TRANSLATION_LANGPAIR
+)
 
 
 def get_store() -> VocabularyStore:
@@ -59,6 +66,8 @@ def lookup_translation(word: str) -> Optional[str]:
     if not sanitized:
         return None
 
+    langpair = app.config.get("TRANSLATION_LANGPAIR", DEFAULT_TRANSLATION_LANGPAIR)
+    params = {"q": sanitized, "langpair": langpair}
     params = {"q": sanitized, "langpair": "auto|zh-TW"}
     url = f"{TRANSLATION_ENDPOINT}?{parse.urlencode(params)}"
     req = urlrequest.Request(
