@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+{% block title %}單字本｜隨身單字本{% endblock %}
+{% block content %}
+<section class="card vocabulary-card">
+  <div class="section-heading">
+    <h2>單字本</h2>
+    <p>今日待複習：<strong>{{ due_count }}</strong> 個單字。</p>
+  </div>
+  {% if entries %}
+    <ul class="vocabulary-list">
+      {% for entry in entries %}
+        <li class="vocabulary-entry">
+          <div class="vocabulary-entry__headline">
+            <button
+              type="button"
+              class="speak-button"
+              data-speak-word="{{ entry.word }}"
+              aria-label="播放 {{ entry.word }} 的發音"
+            >
+              🔈
+            </button>
+            <strong class="vocabulary-entry__word">{{ entry.word }}</strong>
+            <span class="vocabulary-entry__separator">—</span>
+            <span class="vocabulary-entry__definition">{{ entry.definition }}</span>
+          </div>
+          {% if entry.context %}
+            <p class="vocabulary-entry__context">{{ entry.context }}</p>
+          {% endif %}
+          <p class="vocabulary-entry__meta">
+            下一次複習：{{ entry.next_review }} ｜ 連勝：{{ entry.success_streak }} ｜ 複習次數：{{ entry.review_count }}
+          </p>
+        </li>
+      {% endfor %}
+    </ul>
+  {% else %}
+    <p>還沒有單字，趕快新增一個吧！</p>
+  {% endif %}
+</section>
+{% endblock %}
+
+{% block extra_scripts %}
+  <script>
+    (function () {
+      const speakButtons = document.querySelectorAll('[data-speak-word]');
+      if (!speakButtons.length) {
+        return;
+      }
+
+      const supportsSpeech =
+        'speechSynthesis' in window && typeof window.SpeechSynthesisUtterance !== 'undefined';
+      if (!supportsSpeech) {
+        speakButtons.forEach((btn) => {
+          btn.disabled = true;
+          btn.classList.add('speak-button--disabled');
+          btn.title = '瀏覽器不支援語音播放';
+        });
+        return;
+      }
+
+      const speakWord = (text) => {
+        if (!text) {
+          return;
+        }
+        const utterance = new SpeechSynthesisUtterance(text);
+        utterance.lang = 'en-US';
+        utterance.rate = 0.95;
+        window.speechSynthesis.cancel();
+        window.speechSynthesis.speak(utterance);
+      };
+
+      speakButtons.forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const word = btn.getAttribute('data-speak-word');
+          speakWord(word);
+        });
+      });
+    })();
+  </script>
+{% endblock %}

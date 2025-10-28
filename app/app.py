@@ -218,10 +218,22 @@ def lookup_translation(word: str) -> Optional[List[str]]:
 def index() -> str:
     store = get_store()
     entries = store.load()
-    sorted_entries = sort_entries(entries)
     due_entries = get_due_entries(entries)
     return render_template(
         "index.html",
+        due_count=len(due_entries),
+        storage_path=store.path,
+    )
+
+
+@app.get("/vocabulary")
+def vocabulary() -> str:
+    store = get_store()
+    entries = store.load()
+    sorted_entries = sort_entries(entries)
+    due_entries = get_due_entries(entries)
+    return render_template(
+        "vocabulary.html",
         entries=sorted_entries,
         due_count=len(due_entries),
         storage_path=store.path,
