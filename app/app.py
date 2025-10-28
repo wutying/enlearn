@@ -274,11 +274,17 @@ def review() -> str:
     store = get_store()
     entries = store.load()
     due_entries = get_due_entries(entries)
-    current = due_entries[0] if due_entries else None
     remaining = len(due_entries)
-    mode = request.args.get("mode", "word-first")
+    mode = request.args.get("mode")
+
     if mode not in {"word-first", "definition-first"}:
-        mode = "word-first"
+        return render_template(
+            "review_select.html",
+            remaining=remaining,
+            storage_path=store.path,
+        )
+
+    current = due_entries[0] if due_entries else None
     return render_template(
         "review.html",
         entry=current,

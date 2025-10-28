@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block title %}選擇複習模式｜隨身單字本{% endblock %}
+{% block content %}
+<section class="card review-select-card">
+  <h2>選擇複習模式</h2>
+  <p>目前共有 <strong>{{ remaining }}</strong> 個單字待複習。</p>
+  <form method="get" action="{{ url_for('review') }}" class="review-mode-form">
+    <fieldset class="review-mode-options">
+      <legend class="sr-only">複習模式</legend>
+      <label class="mode-option">
+        <input type="radio" name="mode" value="word-first" checked />
+        <div class="mode-option__content">
+          <h3>顯示單字猜解釋</h3>
+          <p>先看到單字，再展開解釋確認是否記得。</p>
+        </div>
+      </label>
+      <label class="mode-option">
+        <input type="radio" name="mode" value="definition-first" />
+        <div class="mode-option__content">
+          <h3>顯示解釋輸入單字</h3>
+          <p>顯示中文或解釋，輸入對應的單字或片語。</p>
+        </div>
+      </label>
+    </fieldset>
+    <button type="submit" class="btn-primary">開始複習</button>
+  </form>
+</section>
+{% endblock %}

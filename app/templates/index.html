@@ -1,13 +1,13 @@
 {% extends "base.html" %}
 {% block title %}新增單字｜隨身單字本{% endblock %}
 {% block content %}
-<section class="card">
+<section class="card new-entry-card">
   <h2>快速新增單字</h2>
-  <form method="post" action="{{ url_for('add_entry_route') }}" class="form-grid">
+  <form method="post" action="{{ url_for('add_entry_route') }}" class="form-grid" data-add-entry>
     <label>
       單字 / 片語
       <input type="text" name="word" placeholder="ex: serendipity" required />
-      <small class="input-hint">輸入後會自動查詢並帶入翻譯。</small>
+      <small class="input-hint">輸入後會自動查詢並帶入翻譯，送出時會朗讀一次加深印象。</small>
     </label>
     <label>
       解釋或翻譯
@@ -22,26 +22,46 @@
   </form>
 </section>
 
-<section class="card">
-  <h2>單字列表</h2>
-  <p>今日待複習：<strong>{{ due_count }}</strong> 個單字。</p>
+<section class="card vocabulary-card">
+  <div class="section-heading">
+    <h2>單字本</h2>
+    <p>今日待複習：<strong>{{ due_count }}</strong> 個單字。</p>
+  </div>
   <p class="storage-hint">資料會儲存在 <code>{{ storage_path }}</code>，方便備份或同步。</p>
   {% if entries %}
     <table class="entries">
       <thead>
         <tr>
-          <th>單字</th>
-          <th>解釋</th>
-          <th>下一次複習</th>
-          <th>連勝</th>
-          <th>複習次數</th>
+          <th scope="col">單字</th>
+          <th scope="col" class="definition-column">解釋</th>
+          <th scope="col">下一次複習</th>
+          <th scope="col">連勝</th>
+          <th scope="col">複習次數</th>
         </tr>
       </thead>
       <tbody>
         {% for entry in entries %}
           <tr>
-            <td>{{ entry.word }}</td>
-            <td>{{ entry.definition }}</td>
+            <td class="word-cell">
+              <span class="word-text">{{ entry.word }}</span>
+              <button
+                type="button"
+                class="speak-button"
+                data-speak-word="{{ entry.word }}"
+                aria-label="播放 {{ entry.word }} 的發音"
+              >
+                🔈
+              </button>
+            </td>
+            <td class="definition-cell" data-collapsible data-expanded="false">
+              <div class="definition-content" data-collapsible-content>
+                <p>{{ entry.definition }}</p>
+                {% if entry.context %}
+                  <p class="context">{{ entry.context }}</p>
+                {% endif %}
+              </div>
+              <button type="button" class="definition-toggle" data-collapsible-toggle>展開更多</button>
+            </td>
             <td>{{ entry.next_review }}</td>
             <td>{{ entry.success_streak }}</td>
             <td>{{ entry.review_count }}</td>
@@ -52,6 +72,31 @@
   {% else %}
     <p>還沒有單字，趕快新增一個吧！</p>
   {% endif %}
+</section>
+
+<section class="card review-overview">
+  <h2>複習單字</h2>
+  <p>選擇想要的複習模式後，再開始進行今日的練習。</p>
+  <form method="get" action="{{ url_for('review') }}" class="review-mode-form">
+    <fieldset class="review-mode-options">
+      <legend class="sr-only">複習模式</legend>
+      <label class="mode-option">
+        <input type="radio" name="mode" value="word-first" checked />
+        <div class="mode-option__content">
+          <h3>顯示單字猜解釋</h3>
+          <p>適合加強熟悉度，朗讀單字後再揭露意思。</p>
+        </div>
+      </label>
+      <label class="mode-option">
+        <input type="radio" name="mode" value="definition-first" />
+        <div class="mode-option__content">
+          <h3>顯示解釋輸入單字</h3>
+          <p>看到中文或解釋，輸入對應英文，檢驗是否真的記住。</p>
+        </div>
+      </label>
+    </fieldset>
+    <button type="submit" class="btn-primary">前往複習（尚有 {{ due_count }} 個）</button>
+  </form>
 </section>
 {% endblock %}
 
@@ -134,10 +179,7 @@
               manualEditWord = '';
             }
             if (Array.isArray(data.meanings) && data.meanings.length > 1) {
-              setStatus(
-                `已帶入多個翻譯：${data.meanings.join('、')}。`,
-                'success'
-              );
+              setStatus(`已帶入多個翻譯：${data.meanings.join('、')}。`, 'success');
             } else {
               setStatus('已自動帶入翻譯，可視需要調整。', 'success');
             }
@@ -198,7 +240,97 @@
       });
 
       setStatus('輸入單字後會自動查詢翻譯。', 'idle');
-      defInput.dataset.autofillWord = '';
+
+      const supportsSpeech = 'speechSynthesis' in window && typeof window.SpeechSynthesisUtterance !== 'undefined';
+      const speakWord = (text) => {
+        if (!supportsSpeech || !text) {
+          return;
+        }
+        const utterance = new SpeechSynthesisUtterance(text);
+        utterance.lang = 'en-US';
+        utterance.rate = 0.95;
+        window.speechSynthesis.cancel();
+        window.speechSynthesis.speak(utterance);
+      };
+
+      const addForm = document.querySelector('[data-add-entry]');
+      if (addForm) {
+        addForm.addEventListener('submit', () => {
+          const word = wordInput.value.trim();
+          speakWord(word);
+        });
+      }
+
+      const speakButtons = document.querySelectorAll('[data-speak-word]');
+      if (supportsSpeech) {
+        speakButtons.forEach((btn) => {
+          btn.addEventListener('click', () => {
+            const word = btn.getAttribute('data-speak-word');
+            speakWord(word);
+          });
+        });
+      } else {
+        speakButtons.forEach((btn) => {
+          btn.disabled = true;
+          btn.classList.add('speak-button--disabled');
+          btn.title = '瀏覽器不支援語音播放';
+        });
+      }
+
+      const updateToggleLabel = (toggle, expanded) => {
+        toggle.textContent = expanded ? '收起內容' : '展開更多';
+      };
+
+      const evaluateCollapsible = (container) => {
+        const content = container.querySelector('[data-collapsible-content]');
+        const toggle = container.querySelector('[data-collapsible-toggle]');
+        if (!content || !toggle) {
+          return;
+        }
+
+        container.dataset.expanded = 'false';
+        const isOverflowing = content.scrollHeight > content.clientHeight + 1;
+        if (!isOverflowing) {
+          container.dataset.expanded = 'true';
+          toggle.hidden = true;
+        } else {
+          toggle.hidden = false;
+          updateToggleLabel(toggle, false);
+        }
+      };
+
+      const collapsibleCells = document.querySelectorAll('[data-collapsible]');
+      const refreshCollapsibles = () => {
+        collapsibleCells.forEach((cell) => {
+          const previouslyExpanded = cell.dataset.expanded === 'true';
+          if (!previouslyExpanded) {
+            evaluateCollapsible(cell);
+          }
+        });
+      };
+
+      collapsibleCells.forEach((cell) => {
+        evaluateCollapsible(cell);
+        const toggle = cell.querySelector('[data-collapsible-toggle]');
+        const content = cell.querySelector('[data-collapsible-content]');
+        if (!toggle || !content) {
+          return;
+        }
+        toggle.addEventListener('click', () => {
+          const expanded = cell.dataset.expanded === 'true';
+          if (expanded) {
+            cell.dataset.expanded = 'false';
+            updateToggleLabel(toggle, false);
+          } else {
+            cell.dataset.expanded = 'true';
+            updateToggleLabel(toggle, true);
+          }
+        });
+      });
+
+      window.addEventListener('resize', () => {
+        refreshCollapsibles();
+      });
     })();
   </script>
 {% endblock %}
