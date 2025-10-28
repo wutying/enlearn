@@ -4,25 +4,29 @@
 <section class="card review-card">
   <h2>複習模式</h2>
   <p class="storage-hint">所有單字都保存在 <code>{{ storage_path }}</code>。</p>
-  <div class="review-mode-toggle" role="tablist" aria-label="切換複習模式">
-    <a
-      href="{{ url_for('review', mode='word-first') }}"
-      class="toggle-pill{% if mode == 'word-first' %} is-active{% endif %}"
-      role="tab"
-      aria-selected="{{ 'true' if mode == 'word-first' else 'false' }}"
-    >顯示單字猜解釋</a>
-    <a
-      href="{{ url_for('review', mode='definition-first') }}"
-      class="toggle-pill{% if mode == 'definition-first' %} is-active{% endif %}"
-      role="tab"
-      aria-selected="{{ 'true' if mode == 'definition-first' else 'false' }}"
-    >顯示解釋輸入單字</a>
-  </div>
+  <p class="review-mode-label">
+    目前模式：
+    {% if mode == 'word-first' %}
+      顯示單字猜解釋
+    {% else %}
+      顯示解釋輸入單字
+    {% endif %}
+  </p>
   {% if entry %}
     <p>還有 <strong>{{ remaining }}</strong> 個單字待複習。</p>
     {% if mode == 'word-first' %}
       <div class="review-word">
-        <h3>{{ entry.word }}</h3>
+        <div class="review-word__header">
+          <button
+            type="button"
+            class="speak-button"
+            data-speak-word="{{ entry.word }}"
+            aria-label="播放 {{ entry.word }} 的發音"
+          >
+            🔈
+          </button>
+          <h3>{{ entry.word }}</h3>
+        </div>
         {% if entry.context %}
           <p class="context">{{ entry.context }}</p>
         {% endif %}
@@ -64,4 +68,44 @@
     <a class="btn-primary" href="{{ url_for('index') }}">回去新增更多單字</a>
   {% endif %}
 </section>
+{% endblock %}
+
+{% block extra_scripts %}
+  <script>
+    (function () {
+      const speakButtons = document.querySelectorAll('[data-speak-word]');
+      if (!speakButtons.length) {
+        return;
+      }
+
+      const supportsSpeech =
+        'speechSynthesis' in window && typeof window.SpeechSynthesisUtterance !== 'undefined';
+      if (!supportsSpeech) {
+        speakButtons.forEach((btn) => {
+          btn.disabled = true;
+          btn.classList.add('speak-button--disabled');
+          btn.title = '瀏覽器不支援語音播放';
+        });
+        return;
+      }
+
+      const speakWord = (text) => {
+        if (!text) {
+          return;
+        }
+        const utterance = new SpeechSynthesisUtterance(text);
+        utterance.lang = 'en-US';
+        utterance.rate = 0.95;
+        window.speechSynthesis.cancel();
+        window.speechSynthesis.speak(utterance);
+      };
+
+      speakButtons.forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const word = btn.getAttribute('data-speak-word');
+          speakWord(word);
+        });
+      });
+    })();
+  </script>
 {% endblock %}
