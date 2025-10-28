@@ -4,7 +4,7 @@ This project gives you a **隨身單字本** that works both as a friendly web a
 
 ## 功能重點
 
-- **立即新增**：在新增單字時會自動查詢翻譯（需網路連線），直接帶入欄位讓你確認或微調，再加上例句就能一起存好。
+- **立即新增**：在新增單字時會自動查詢翻譯（需網路連線），直接帶入欄位讓你確認或微調，再加上例句就能一起存好。系統透過 Google 翻譯的公開端點提供查詢，一次帶出同一個單字的多種可能意思，讓你保留完整語意。
 - **雙重複習模式**：可在複習頁面切換「顯示單字猜解釋」或「顯示解釋輸入單字」，依照當天狀態自由選擇。
 - **進度追蹤**：系統會統計每個單字的複習次數與連勝紀錄，幫助你掌握學習成效。
 - **跨裝置同步**：資料儲存在 `~/.enlearn/vocab.json`，只要同步這個檔案就能在多個裝置上持續累積。
@@ -77,7 +77,7 @@ This project gives you a **隨身單字本** that works both as a friendly web a
      $env:VOCAB_STORAGE="C:\\Users\\你的帳號\\Dropbox\\vocab.json"  # 立即生效
      ```
 
-   > 翻譯查詢預設會將英文轉成繁體中文（`EN|ZH-TW`）。若你習慣不同語言組合，可於啟動前設定 `TRANSLATION_LANGPAIR` 環境變數，例如：
+   > 翻譯查詢預設會將英文轉成繁體中文（`EN|ZH-TW`），並透過 `https://translate.googleapis.com/translate_a/single` 的公開 Google 翻譯端點取得所有可用的翻譯與字典釋義。若你習慣不同語言組合，可於啟動前設定 `TRANSLATION_LANGPAIR` 環境變數，例如：
 
    - macOS/Linux：
 
