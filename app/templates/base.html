@@ -10,8 +10,10 @@
     <header class="app-header">
       <h1><a href="{{ url_for('index') }}">隨身單字本</a></h1>
       <nav>
-        <a href="{{ url_for('index') }}">新增單字</a>
-        <a href="{{ url_for('review') }}">開始複習</a>
+        {% set current = request.endpoint %}
+        <a href="{{ url_for('index') }}" class="{% if current == 'index' %}is-active{% endif %}">新增單字</a>
+        <a href="{{ url_for('vocab_book') }}" class="{% if current == 'vocab_book' %}is-active{% endif %}">單字本</a>
+        <a href="{{ url_for('review') }}" class="{% if current == 'review' %}is-active{% endif %}">開始複習</a>
       </nav>
     </header>
 

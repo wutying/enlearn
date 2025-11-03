@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block title %}選擇複習模式｜隨身單字本{% endblock %}
+{% block content %}
+<section class="card review-select">
+  <h2>選擇複習模式</h2>
+  <p class="section-lead">
+    單字本共有 <strong>{{ total_count }}</strong> 個單字，今日待複習 <strong>{{ due_count }}</strong> 個。
+  </p>
+  <div class="review-options">
+    <a class="review-option" href="{{ url_for('review', mode='word-first') }}">
+      <h3>先看單字</h3>
+      <p>顯示單字，先試著回想解釋，再揭曉答案。</p>
+    </a>
+    <a class="review-option" href="{{ url_for('review', mode='definition-first') }}">
+      <h3>先看解釋</h3>
+      <p>顯示解釋或翻譯，輸入對應的單字，加強記憶。</p>
+    </a>
+  </div>
+  <p class="section-footer">隨時可以透過上方導覽列切換模式或返回新增單字頁面。</p>
+</section>
+{% endblock %}
