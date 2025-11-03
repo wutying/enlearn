@@ -3,6 +3,9 @@
 {% block content %}
 <section class="card review-card">
   <h2>複習模式</h2>
+  <p class="section-lead">
+    單字本共有 <strong>{{ total_count }}</strong> 個單字，今日待複習 <strong>{{ due_count }}</strong> 個。
+  </p>
   <p class="storage-hint">所有單字都保存在 <code>{{ storage_path }}</code>。</p>
   <div class="review-mode-toggle" role="tablist" aria-label="切換複習模式">
     <a

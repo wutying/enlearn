@@ -218,10 +218,23 @@ def lookup_translation(word: str) -> Optional[List[str]]:
 def index() -> str:
     store = get_store()
     entries = store.load()
-    sorted_entries = sort_entries(entries)
     due_entries = get_due_entries(entries)
     return render_template(
         "index.html",
+        due_count=len(due_entries),
+        total_count=len(entries),
+        storage_path=store.path,
+    )
+
+
+@app.get("/vocab")
+def vocab_book() -> str:
+    store = get_store()
+    entries = store.load()
+    sorted_entries = sort_entries(entries)
+    due_entries = get_due_entries(entries)
+    return render_template(
+        "vocab.html",
         entries=sorted_entries,
         due_count=len(due_entries),
         storage_path=store.path,
@@ -274,17 +287,25 @@ def review() -> str:
     store = get_store()
     entries = store.load()
     due_entries = get_due_entries(entries)
+    mode = request.args.get("mode", "").strip()
+    if mode not in {"word-first", "definition-first"}:
+        return render_template(
+            "review_select.html",
+            due_count=len(due_entries),
+            total_count=len(entries),
+            storage_path=store.path,
+        )
+
     current = due_entries[0] if due_entries else None
     remaining = len(due_entries)
-    mode = request.args.get("mode", "word-first")
-    if mode not in {"word-first", "definition-first"}:
-        mode = "word-first"
     return render_template(
         "review.html",
         entry=current,
         remaining=remaining,
         storage_path=store.path,
         mode=mode,
+        due_count=len(due_entries),
+        total_count=len(entries),
     )
 
 

@@ -3,7 +3,11 @@
 {% block content %}
 <section class="card">
   <h2>快速新增單字</h2>
-  <form method="post" action="{{ url_for('add_entry_route') }}" class="form-grid">
+  <p class="section-lead">
+    今日待複習：<strong>{{ due_count }}</strong> 個單字，
+    單字本共有 <strong>{{ total_count }}</strong> 筆紀錄。
+  </p>
+  <form method="post" action="{{ url_for('add_entry_route') }}" class="form-grid" id="add-entry-form">
     <label>
       單字 / 片語
       <input type="text" name="word" placeholder="ex: serendipity" required />
@@ -18,40 +22,8 @@
       情境或例句（選填）
       <textarea name="context" rows="3" placeholder="ex: Finding the café was pure serendipity."></textarea>
     </label>
-    <button type="submit" class="btn-primary">加入單字</button>
+    <button type="submit" class="btn-primary" data-action="speak-on-submit">加入單字並發音</button>
   </form>
-</section>
-
-<section class="card">
-  <h2>單字列表</h2>
-  <p>今日待複習：<strong>{{ due_count }}</strong> 個單字。</p>
-  <p class="storage-hint">資料會儲存在 <code>{{ storage_path }}</code>，方便備份或同步。</p>
-  {% if entries %}
-    <table class="entries">
-      <thead>
-        <tr>
-          <th>單字</th>
-          <th>解釋</th>
-          <th>下一次複習</th>
-          <th>連勝</th>
-          <th>複習次數</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for entry in entries %}
-          <tr>
-            <td>{{ entry.word }}</td>
-            <td>{{ entry.definition }}</td>
-            <td>{{ entry.next_review }}</td>
-            <td>{{ entry.success_streak }}</td>
-            <td>{{ entry.review_count }}</td>
-          </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-  {% else %}
-    <p>還沒有單字，趕快新增一個吧！</p>
-  {% endif %}
 </section>
 {% endblock %}
 
@@ -61,10 +33,26 @@
       const wordInput = document.querySelector('input[name="word"]');
       const defInput = document.querySelector('textarea[name="definition"]');
       const statusEl = document.getElementById('lookup-status');
+      const form = document.getElementById('add-entry-form');
 
       if (!wordInput || !defInput || !statusEl) {
         return;
       }
+
+      const speakWord = (text) => {
+        if (
+          !text ||
+          !('speechSynthesis' in window) ||
+          typeof window.SpeechSynthesisUtterance !== 'function'
+        ) {
+          return;
+        }
+        window.speechSynthesis.cancel();
+        const utterance = new SpeechSynthesisUtterance(text);
+        utterance.lang = 'en-US';
+        utterance.rate = 0.95;
+        window.speechSynthesis.speak(utterance);
+      };
 
       const focusWordInput = () => {
         wordInput.focus();
@@ -199,6 +187,15 @@
 
       setStatus('輸入單字後會自動查詢翻譯。', 'idle');
       defInput.dataset.autofillWord = '';
+
+      if (form) {
+        form.addEventListener('submit', () => {
+          const value = wordInput.value.trim();
+          if (value) {
+            speakWord(value);
+          }
+        });
+      }
     })();
   </script>
 {% endblock %}
