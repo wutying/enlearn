@@ -1,5 +1,4 @@
 {% extends "base.html" %}
-{% block title %}新增單字｜貝多芬{% endblock %}
 {% block content %}
 <section class="card">
   <h2>快速新增單字</h2>
@@ -14,6 +13,7 @@
     id="add-entry-form"
     autocomplete="off"
   >
+    <input type="hidden" name="lookup_state" id="lookup-state" value="idle" />
     <label>
       單字 / 片語
       <input
@@ -46,7 +46,7 @@
       ></textarea>
     </label>
     <div class="form-actions">
-      <button type="button" class="btn-secondary" id="speak-word-button">發音</button>
+      <button type="button" class="btn-primary" id="speak-word-button">發音</button>
       <button type="submit" class="btn-primary">新增單字</button>
     </div>
   </form>
@@ -59,6 +59,8 @@
       const wordInput = document.querySelector('input[name="word"]');
       const defInput = document.querySelector('textarea[name="definition"]');
       const statusEl = document.getElementById('lookup-status');
+      const lookupStateInput = document.getElementById('lookup-state');
+      const form = document.getElementById('add-entry-form');
       if (!wordInput || !defInput || !statusEl) {
         return;
       }
@@ -95,6 +97,9 @@
       const setStatus = (message, state) => {
         statusEl.textContent = message;
         statusEl.dataset.state = state;
+        if (lookupStateInput) {
+          lookupStateInput.value = state;
+        }
       };
 
       const cancelLookup = () => {
@@ -217,6 +222,27 @@
       if (speakButton) {
         speakButton.addEventListener('click', () => {
           const value = wordInput.value.trim();
+          if (value) {
+            speakWord(value);
+          }
+        });
+      }
+
+      if (form) {
+        form.addEventListener('submit', (event) => {
+          const value = wordInput.value.trim();
+          const state = lookupStateInput ? lookupStateInput.value : statusEl.dataset.state;
+          if (state === 'warning' || state === 'error') {
+            event.preventDefault();
+            setStatus('查無此單字，請檢查拼字後再試。', 'warning');
+            focusWordInput();
+            return;
+          }
+          if (state === 'loading') {
+            event.preventDefault();
+            setStatus('請等待翻譯查詢完成後再新增。', 'warning');
+            return;
+          }
           if (value) {
             speakWord(value);
           }

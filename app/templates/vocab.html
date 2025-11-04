@@ -1,5 +1,4 @@
 {% extends "base.html" %}
-{% block title %}單字本｜貝多芬{% endblock %}
 {% block content %}
 <section class="card">
   <h2>單字本</h2>
@@ -11,21 +10,31 @@
       {% for entry in entries %}
         <article class="vocab-item">
           <header class="vocab-item__header">
-            <div>
-              <h3>{{ entry.word }}</h3>
+            <div class="vocab-item__title">
+              <h3>
+                <span class="vocab-item__word">{{ entry.word }}</span>
+                <span class="vocab-item__definition">— {{ entry.definition }}</span>
+              </h3>
               <p class="vocab-item__meta">
                 下一次複習：{{ entry.next_review }} · 連勝 {{ entry.success_streak }} · 已複習 {{ entry.review_count }} 次
               </p>
             </div>
-            <button type="button" class="speak-button" data-word="{{ entry.word }}" aria-label="播放 {{ entry.word }} 的發音">
-              🔊 發音
-            </button>
+            <div class="vocab-item__actions">
+              <button type="button" class="speak-button" data-word="{{ entry.word }}" aria-label="播放 {{ entry.word }} 的發音">
+                🔊 發音
+              </button>
+              <form
+                method="post"
+                action="{{ url_for('delete_entry', entry_id=entry.id) }}"
+                class="inline-form"
+              >
+                <button type="submit" class="btn-link btn-link--danger" aria-label="刪除 {{ entry.word }}">
+                  刪除
+                </button>
+              </form>
+            </div>
           </header>
           <div class="vocab-item__body">
-            <div class="definition-block">
-              <div class="definition-preview" data-expanded="false">{{ entry.definition }}</div>
-              <button type="button" class="definition-toggle" hidden>展開更多</button>
-            </div>
             {% if entry.context %}
               <p class="vocab-item__context">例句：{{ entry.context }}</p>
             {% endif %}
@@ -64,40 +73,6 @@
         });
       });
 
-      const updateToggleState = (preview, toggle) => {
-        if (!preview || !toggle) {
-          return;
-        }
-        const needsToggle = preview.scrollHeight - preview.clientHeight > 8;
-        toggle.hidden = !needsToggle;
-        if (!needsToggle) {
-          preview.dataset.expanded = 'true';
-        }
-      };
-
-      document.querySelectorAll('.definition-block').forEach((block) => {
-        const preview = block.querySelector('.definition-preview');
-        const toggle = block.querySelector('.definition-toggle');
-        if (!preview || !toggle) {
-          return;
-        }
-
-        const init = () => {
-          updateToggleState(preview, toggle);
-        };
-
-        if (document.readyState === 'complete') {
-          init();
-        } else {
-          window.addEventListener('load', init, { once: true });
-        }
-
-        toggle.addEventListener('click', () => {
-          const expanded = preview.dataset.expanded === 'true';
-          preview.dataset.expanded = expanded ? 'false' : 'true';
-          toggle.textContent = expanded ? '展開更多' : '收起內容';
-        });
-      });
     })();
   </script>
 {% endblock %}
