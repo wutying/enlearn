@@ -92,7 +92,43 @@ def create_entry(word: str, definition: str, context: str = "", now: datetime | 
 
 
 def sort_entries(entries: Iterable[Dict[str, Any]]) -> List[Dict[str, Any]]:
-    return sorted(entries, key=lambda e: (e.get("next_review", ""), e.get("word", "")))
+    """Return entries sorted by review urgency and recency.
+
+    Entries with the fewest reviews appear first. When review counts are
+    identical we prioritise the most recently added words so that newly added
+    vocabulary stays near the top of the list. As a final tie-breaker we sort
+    alphabetically by the word itself to keep the ordering stable.
+    """
+
+    def _review_count(entry: Dict[str, Any]) -> int:
+        try:
+            return int(entry.get("review_count", 0))
+        except (TypeError, ValueError):
+            return 0
+
+    def _created_at_order(entry: Dict[str, Any]) -> int:
+        raw = entry.get("created_at")
+        if isinstance(raw, str):
+            try:
+                created_at = datetime.strptime(raw, DATE_FMT)
+            except ValueError:
+                created_at = datetime.min
+        else:
+            created_at = datetime.min
+        # Use a negative ordinal so that more recent dates (with a larger
+        # ordinal) end up earlier in the ascending sort order.
+        return -created_at.toordinal()
+
+    def _word_key(entry: Dict[str, Any]) -> str:
+        word = entry.get("word")
+        if isinstance(word, str):
+            return word
+        return ""
+
+    return sorted(
+        entries,
+        key=lambda entry: (_review_count(entry), _created_at_order(entry), _word_key(entry)),
+    )
 
 
 def get_due_entries(entries: Iterable[Dict[str, Any]], as_of: datetime | None = None) -> List[Dict[str, Any]]:

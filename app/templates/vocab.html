@@ -6,15 +6,24 @@
     目前共收藏 <strong>{{ entries|length }}</strong> 個單字，今日待複習 <strong>{{ due_count }}</strong> 個。
   </p>
   {% if entries %}
+    <div class="vocab-actions">
+      <button type="button" id="speak-all" class="btn-secondary">
+        🔊 朗讀全部
+      </button>
+    </div>
     <div class="vocab-list">
       {% for entry in entries %}
-        <article class="vocab-item">
+        <article
+          class="vocab-item"
+          data-word="{{ entry.word | e }}"
+          data-definition="{{ (entry.definition or '') | e }}"
+        >
           <header class="vocab-item__header">
             <div class="vocab-item__title">
               <h3 class="vocab-item__word">
                 <span class="vocab-item__word-text">{{ entry.word }}</span>
                 {% if entry.definition %}
-                  <span class="vocab-item__definition">：{{ entry.definition }}</span>
+                  <span class="vocab-item__definition">{{ entry.definition }}</span>
                 {% endif %}
               </h3>
             </div>
@@ -53,28 +62,99 @@
 {% block extra_scripts %}
   <script>
     (function () {
-      const speakWord = (text) => {
-        if (
-          !text ||
-          !('speechSynthesis' in window) ||
-          typeof window.SpeechSynthesisUtterance !== 'function'
-        ) {
+      const supportsSpeech =
+        'speechSynthesis' in window && typeof window.SpeechSynthesisUtterance === 'function';
+      if (!supportsSpeech) {
+        return;
+      }
+
+      const queueSpeech = (segments) => {
+        if (!segments.length) {
+          return;
+        }
+
+        const [{ text, lang, rate }, ...rest] = segments;
+        const utterance = new SpeechSynthesisUtterance(text);
+        if (lang) {
+          utterance.lang = lang;
+        }
+        if (rate) {
+          utterance.rate = rate;
+        }
+        utterance.onend = () => {
+          queueSpeech(rest);
+        };
+        utterance.onerror = () => {
+          queueSpeech(rest);
+        };
+        window.speechSynthesis.speak(utterance);
+      };
+
+      const extractDefinitions = (raw) => {
+        if (!raw) {
+          return [];
+        }
+        const parts = raw
+          .split(/[；;,，]/)
+          .map((part) => part.trim())
+          .filter(Boolean);
+        if (!parts.length && raw.trim()) {
+          parts.push(raw.trim());
+        }
+        return parts.slice(0, 2);
+      };
+
+      const buildSegmentsForEntry = (element) => {
+        const word = (element.dataset.word || '').trim();
+        const definitionRaw = (element.dataset.definition || '').trim();
+        if (!word && !definitionRaw) {
+          return [];
+        }
+        const segments = [];
+        if (word) {
+          for (let i = 0; i < 3; i += 1) {
+            segments.push({ text: word, lang: 'en-US', rate: 0.95 });
+          }
+        }
+        extractDefinitions(definitionRaw).forEach((definition) => {
+          segments.push({ text: definition, lang: 'zh-TW', rate: 1 });
+        });
+        return segments;
+      };
+
+      const speakEntry = (element) => {
+        const segments = buildSegmentsForEntry(element);
+        if (!segments.length) {
           return;
         }
         window.speechSynthesis.cancel();
-        const utterance = new SpeechSynthesisUtterance(text);
-        utterance.lang = 'en-US';
-        utterance.rate = 0.95;
-        window.speechSynthesis.speak(utterance);
+        queueSpeech(segments);
       };
 
       document.querySelectorAll('.speak-button').forEach((button) => {
         button.addEventListener('click', () => {
-          const word = button.dataset.word || '';
-          speakWord(word.trim());
+          const container = button.closest('.vocab-item');
+          if (container) {
+            speakEntry(container);
+          }
         });
       });
 
+      const speakAllButton = document.getElementById('speak-all');
+      if (speakAllButton) {
+        speakAllButton.addEventListener('click', () => {
+          const items = Array.from(document.querySelectorAll('.vocab-item'));
+          const segments = [];
+          items.forEach((item) => {
+            segments.push(...buildSegmentsForEntry(item));
+          });
+          if (!segments.length) {
+            return;
+          }
+          window.speechSynthesis.cancel();
+          queueSpeech(segments);
+        });
+      }
     })();
   </script>
 {% endblock %}
