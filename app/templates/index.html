@@ -44,6 +44,16 @@
         placeholder="ex: Finding the café was pure serendipity."
         autocomplete="off"
       ></textarea>
+      <small class="input-hint">可直接輸入，或從建議例句中選擇；若未選擇將自動使用第一個例句。</small>
+      <div
+        id="example-suggestions"
+        class="example-suggestions"
+        hidden
+        aria-live="polite"
+      >
+        <p class="example-suggestions__title">建議例句</p>
+        <ul class="example-suggestions__list"></ul>
+      </div>
     </label>
     <div class="form-actions">
       <button type="button" class="btn-primary" id="speak-word-button">發音</button>
@@ -58,13 +68,21 @@
     (function () {
       const wordInput = document.querySelector('input[name="word"]');
       const defInput = document.querySelector('textarea[name="definition"]');
+      const contextInput = document.querySelector('textarea[name="context"]');
       const statusEl = document.getElementById('lookup-status');
       const lookupStateInput = document.getElementById('lookup-state');
       const form = document.getElementById('add-entry-form');
+      const examplesContainer = document.getElementById('example-suggestions');
+      const examplesList = examplesContainer
+        ? examplesContainer.querySelector('.example-suggestions__list')
+        : null;
+      const defaultContextPlaceholder = contextInput
+        ? contextInput.getAttribute('placeholder') || ''
+        : '';
       const WORD_PATTERN = /^[A-Za-z][A-Za-z\s'-]*$/;
       const INVALID_WORD_MESSAGE =
         '請輸入有效的英文單字（僅限英文字母、空格、連字符或撇號）。';
-      if (!wordInput || !defInput || !statusEl) {
+      if (!wordInput || !defInput || !statusEl || !contextInput) {
         return;
       }
 
@@ -96,6 +114,78 @@
       let manualEditWord = '';
       let lookupDelay = null;
       let activeController = null;
+      let currentExamples = [];
+      let selectedExampleIndex = null;
+
+      const updateExampleSelection = () => {
+        if (!examplesList) {
+          return;
+        }
+        const buttons = examplesList.querySelectorAll('.example-option');
+        buttons.forEach((button, index) => {
+          const isSelected = index === selectedExampleIndex;
+          button.classList.toggle('is-selected', isSelected);
+          button.setAttribute('aria-pressed', isSelected ? 'true' : 'false');
+        });
+      };
+
+      const renderExamples = () => {
+        if (!examplesContainer || !examplesList) {
+          return;
+        }
+        examplesList.innerHTML = '';
+        if (!currentExamples.length) {
+          examplesContainer.hidden = true;
+          contextInput.placeholder = defaultContextPlaceholder;
+          return;
+        }
+
+        currentExamples.forEach((example, index) => {
+          const item = document.createElement('li');
+          item.className = 'example-suggestions__item';
+          const button = document.createElement('button');
+          button.type = 'button';
+          button.className = 'example-option';
+          if (index === 0) {
+            button.classList.add('example-option--primary');
+          }
+          button.textContent = example;
+          button.title = example;
+          button.addEventListener('click', () => {
+            contextInput.value = example;
+            selectedExampleIndex = index;
+            updateExampleSelection();
+            contextInput.focus();
+          });
+          item.appendChild(button);
+          examplesList.appendChild(item);
+        });
+
+        examplesContainer.hidden = false;
+        contextInput.placeholder = currentExamples[0] || defaultContextPlaceholder;
+        updateExampleSelection();
+      };
+
+      const setExamples = (examples, wordForExamples = '') => {
+        const sanitized = Array.isArray(examples)
+          ? examples
+              .filter((item) => typeof item === 'string')
+              .map((item) => item.trim())
+              .filter((item, index, arr) => item && arr.indexOf(item) === index)
+          : [];
+        currentExamples = sanitized;
+        selectedExampleIndex = null;
+        contextInput.dataset.examplesForWord = wordForExamples;
+        renderExamples();
+      };
+
+      setExamples([]);
+
+      contextInput.addEventListener('input', () => {
+        selectedExampleIndex = null;
+        contextInput.dataset.examplesForWord = '';
+        updateExampleSelection();
+      });
 
       const setStatus = (message, state) => {
         statusEl.textContent = message;
@@ -143,6 +233,7 @@
 
           if (data.status === 'invalid') {
             setStatus(INVALID_WORD_MESSAGE, 'invalid');
+            setExamples([]);
             return;
           }
 
@@ -166,16 +257,20 @@
             } else {
               setStatus('已自動帶入翻譯，可視需要調整。', 'success');
             }
+            setExamples(Array.isArray(data.examples) ? data.examples : [], word);
           } else if (data.status === 'not_found') {
             setStatus('找不到翻譯，請自行輸入。', 'warning');
+            setExamples(Array.isArray(data.examples) ? data.examples : [], word);
           } else {
             setStatus('請輸入單字以查詢翻譯。', 'idle');
+            setExamples([], word);
           }
         } catch (err) {
           if (err.name === 'AbortError') {
             return;
           }
           setStatus('查詢翻譯失敗，請稍後再試或自行輸入。', 'error');
+          setExamples([]);
         } finally {
           if (activeController === controller) {
             activeController = null;
@@ -191,6 +286,15 @@
 
       wordInput.addEventListener('input', () => {
         const word = wordInput.value.trim();
+        const examplesForWord = contextInput.dataset.examplesForWord || '';
+
+        if (examplesForWord && examplesForWord !== word) {
+          const currentValue = contextInput.value.trim();
+          if (!currentValue || currentExamples.includes(currentValue)) {
+            contextInput.value = '';
+          }
+          setExamples([], '');
+        }
 
         if (defInput.dataset.autofillWord && defInput.dataset.autofillWord !== word) {
           defInput.value = '';
@@ -215,6 +319,7 @@
             defInput.value = '';
           }
           manualEditWord = '';
+          setExamples([], '');
           setStatus('請輸入單字以查詢翻譯。', 'idle');
           return;
         }
@@ -225,6 +330,7 @@
             defInput.value = '';
           }
           manualEditWord = '';
+          setExamples([], '');
           setStatus(INVALID_WORD_MESSAGE, 'invalid');
           return;
         }
@@ -274,6 +380,12 @@
             event.preventDefault();
             setStatus('請等待翻譯查詢完成後再新增。', 'warning');
             return;
+          }
+          if (!contextInput.value.trim() && currentExamples.length) {
+            contextInput.value = currentExamples[0];
+            selectedExampleIndex = 0;
+            contextInput.dataset.examplesForWord = value;
+            updateExampleSelection();
           }
           if (value) {
             speakWord(value);

@@ -198,6 +198,61 @@ textarea {
   min-height: 1.2em;
 }
 
+.example-suggestions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-top: 0.25rem;
+}
+
+.example-suggestions__title {
+  margin: 0;
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+
+.example-suggestions__list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 0.5rem;
+}
+
+.example-suggestions__item {
+  margin: 0;
+}
+
+.example-option {
+  width: 100%;
+  text-align: left;
+  padding: 0.65rem 0.8rem;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: rgba(37, 99, 235, 0.05);
+  color: inherit;
+  font-size: 0.95rem;
+  cursor: pointer;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+}
+
+.example-option--primary {
+  font-weight: 600;
+}
+
+.example-option:hover,
+.example-option:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.2);
+  background: rgba(37, 99, 235, 0.1);
+}
+
+.example-option.is-selected {
+  border-color: var(--accent);
+  background: rgba(37, 99, 235, 0.18);
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.25);
+}
+
 .lookup-status[data-state="loading"] {
   color: var(--accent);
 }

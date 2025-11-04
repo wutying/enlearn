@@ -5,6 +5,7 @@ import functools
 import json
 import os
 import re
+from html import unescape
 from pathlib import Path
 from typing import List, Optional, Tuple
 from urllib import error, parse, request as urlrequest
@@ -127,7 +128,7 @@ def _fetch_translation_payload(word: str, langpair: Tuple[str, str]) -> Optional
         "sl": _format_lang_for_google(source),
         "tl": _format_lang_for_google(target),
         "dj": "1",
-        "dt": ["t", "bd", "md", "at"],
+        "dt": ["t", "bd", "md", "at", "ex"],
         "q": word,
     }
     # ``urlencode`` cannot encode list values by default, so we manually expand them.
@@ -205,6 +206,46 @@ def _extract_translations(data: dict, original: str) -> List[str]:
     return results
 
 
+def _strip_html_tags(text: str) -> str:
+    return re.sub(r"<[^>]+>", "", text)
+
+
+def _extract_examples(data: dict) -> List[str]:
+    results: List[str] = []
+
+    examples_section = data.get("examples")
+    if isinstance(examples_section, dict):
+        items = examples_section.get("example")
+        if isinstance(items, list):
+            for item in items:
+                if not isinstance(item, dict):
+                    continue
+                raw = item.get("text")
+                if not isinstance(raw, str):
+                    continue
+                cleaned = unescape(_strip_html_tags(raw)).strip()
+                if cleaned and cleaned not in results:
+                    results.append(cleaned)
+
+    return results
+
+
+@functools.lru_cache(maxsize=256)
+def _lookup_translation_data_cached(sanitized_word: str) -> Optional[dict]:
+    langpair = _resolve_langpair()
+    data = _fetch_translation_payload(sanitized_word, langpair)
+    if not data and langpair != DEFAULT_LANGPAIR_TUPLE:
+        data = _fetch_translation_payload(sanitized_word, DEFAULT_LANGPAIR_TUPLE)
+    return data
+
+
+def _get_translation_data(word: str) -> Optional[dict]:
+    sanitized = word.strip()
+    if not sanitized:
+        return None
+    return _lookup_translation_data_cached(sanitized)
+
+
 @functools.lru_cache(maxsize=256)
 def lookup_translation(word: str) -> Optional[List[str]]:
     """Fetch a translation for ``word`` from the external API."""
@@ -213,11 +254,7 @@ def lookup_translation(word: str) -> Optional[List[str]]:
     if not sanitized:
         return None
 
-    langpair = _resolve_langpair()
-    data = _fetch_translation_payload(sanitized, langpair)
-    if not data and langpair != DEFAULT_LANGPAIR_TUPLE:
-        data = _fetch_translation_payload(sanitized, DEFAULT_LANGPAIR_TUPLE)
-
+    data = _get_translation_data(sanitized)
     if not data:
         return None
 
@@ -258,12 +295,17 @@ def lookup() -> Response:
 
     word = request.args.get("word", "").strip()
     if not word:
-        return jsonify({"status": "empty", "translation": ""}), 200
+        return jsonify({"status": "empty", "translation": "", "examples": []}), 200
 
     if not _is_valid_word(word):
-        return jsonify({"status": "invalid", "translation": ""}), 200
+        return jsonify({"status": "invalid", "translation": "", "examples": []}), 200
 
-    translations = lookup_translation(word)
+    data = _get_translation_data(word)
+    if not data:
+        return jsonify({"status": "not_found", "translation": "", "examples": []}), 200
+
+    translations = _extract_translations(data, word)
+    examples = _extract_examples(data)
     if translations:
         joined = "；".join(translations)
         return (
@@ -271,11 +313,19 @@ def lookup() -> Response:
                 "status": "ok",
                 "translation": joined,
                 "meanings": translations,
+                "examples": examples[:5],
             }),
             200,
         )
 
-    return jsonify({"status": "not_found", "translation": ""}), 200
+    return (
+        jsonify({
+            "status": "not_found",
+            "translation": "",
+            "examples": examples[:5],
+        }),
+        200,
+    )
 
 
 @app.post("/add")

@@ -112,9 +112,10 @@
         }
         const segments = [];
         if (word) {
-          for (let i = 0; i < 3; i += 1) {
-            segments.push({ text: word, lang: 'en-US', rate: 0.95 });
-          }
+          const rates = [0.95, 0.8, 0.95];
+          rates.forEach((rate) => {
+            segments.push({ text: word, lang: 'en-US', rate });
+          });
         }
         extractDefinitions(definitionRaw).forEach((definition) => {
           segments.push({ text: definition, lang: 'zh-TW', rate: 1 });
