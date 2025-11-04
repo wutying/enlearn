@@ -310,6 +310,16 @@ textarea {
   gap: 1rem;
 }
 
+.vocab-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 1rem;
+}
+
+.vocab-actions .btn-secondary {
+  padding-inline: 1.25rem;
+}
+
 .vocab-item {
   border: 1px solid rgba(148, 163, 184, 0.3);
   border-radius: 16px;
@@ -371,6 +381,7 @@ textarea {
   font-size: 1.05rem;
   color: var(--muted);
   line-height: 1.5;
+  margin-left: 0.25rem;
 }
 
 .vocab-item__body {
