@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}複習單字｜隨身單字本{% endblock %}
+{% block title %}複習單字｜貝多芬{% endblock %}
 {% block content %}
 <section class="card review-card">
   <h2>複習模式</h2>
@@ -49,11 +49,22 @@
         {% endif %}
       </div>
       <p class="review-meta">已複習 {{ entry.review_count }} 次，請輸入對應的單字或片語。</p>
-      <form method="post" action="{{ url_for('review_result', entry_id=entry.id) }}" class="definition-first-form">
+      <form
+        method="post"
+        action="{{ url_for('review_result', entry_id=entry.id) }}"
+        class="definition-first-form"
+        autocomplete="off"
+      >
         <input type="hidden" name="mode" value="definition-first" />
         <label>
           我的答案
-          <input type="text" name="answer" placeholder="輸入單字" required />
+          <input
+            type="text"
+            name="answer"
+            placeholder="輸入單字"
+            required
+            autocomplete="off"
+          />
         </label>
         <button type="submit" class="btn-primary">送出答案</button>
       </form>

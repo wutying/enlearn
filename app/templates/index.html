@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}新增單字｜隨身單字本{% endblock %}
+{% block title %}新增單字｜貝多芬{% endblock %}
 {% block content %}
 <section class="card">
   <h2>快速新增單字</h2>
@@ -7,22 +7,48 @@
     今日待複習：<strong>{{ due_count }}</strong> 個單字，
     單字本共有 <strong>{{ total_count }}</strong> 筆紀錄。
   </p>
-  <form method="post" action="{{ url_for('add_entry_route') }}" class="form-grid" id="add-entry-form">
+  <form
+    method="post"
+    action="{{ url_for('add_entry_route') }}"
+    class="form-grid"
+    id="add-entry-form"
+    autocomplete="off"
+  >
     <label>
       單字 / 片語
-      <input type="text" name="word" placeholder="ex: serendipity" required />
+      <input
+        type="text"
+        name="word"
+        placeholder="ex: serendipity"
+        required
+        autocomplete="off"
+      />
       <small class="input-hint">輸入後會自動查詢並帶入翻譯。</small>
     </label>
     <label>
       解釋或翻譯
-      <textarea name="definition" rows="3" placeholder="ex: 意外得到的驚喜收穫" required></textarea>
+      <textarea
+        name="definition"
+        rows="3"
+        placeholder="ex: 意外得到的驚喜收穫"
+        required
+        autocomplete="off"
+      ></textarea>
       <small id="lookup-status" class="lookup-status" aria-live="polite"></small>
     </label>
     <label>
       情境或例句（選填）
-      <textarea name="context" rows="3" placeholder="ex: Finding the café was pure serendipity."></textarea>
+      <textarea
+        name="context"
+        rows="3"
+        placeholder="ex: Finding the café was pure serendipity."
+        autocomplete="off"
+      ></textarea>
     </label>
-    <button type="submit" class="btn-primary" data-action="speak-on-submit">加入單字並發音</button>
+    <div class="form-actions">
+      <button type="button" class="btn-secondary" id="speak-word-button">發音</button>
+      <button type="submit" class="btn-primary">新增單字</button>
+    </div>
   </form>
 </section>
 {% endblock %}
@@ -33,8 +59,6 @@
       const wordInput = document.querySelector('input[name="word"]');
       const defInput = document.querySelector('textarea[name="definition"]');
       const statusEl = document.getElementById('lookup-status');
-      const form = document.getElementById('add-entry-form');
-
       if (!wordInput || !defInput || !statusEl) {
         return;
       }
@@ -188,8 +212,10 @@
       setStatus('輸入單字後會自動查詢翻譯。', 'idle');
       defInput.dataset.autofillWord = '';
 
-      if (form) {
-        form.addEventListener('submit', () => {
+      const speakButton = document.getElementById('speak-word-button');
+
+      if (speakButton) {
+        speakButton.addEventListener('click', () => {
           const value = wordInput.value.trim();
           if (value) {
             speakWord(value);
