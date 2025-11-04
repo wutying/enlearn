@@ -42,6 +42,7 @@ DEFAULT_LANGPAIR_TUPLE: Tuple[str, str] = tuple(
 # segment (e.g. ``EN``, ``EN-US``, ``ZH-TW``, ``SR-LATN``). Wider values such as
 # ``AUTO`` are rejected so we can gracefully fall back to the safe default.
 _LANG_CODE_RE = re.compile(r"^[A-Za-z]{2,3}(?:-[A-Za-z0-9]{2,8})?$")
+_WORD_VALIDATION_RE = re.compile(r"^[A-Za-z][A-Za-z\s'-]*$")
 
 
 app.config["TRANSLATION_LANGPAIR"] = os.environ.get(
@@ -99,6 +100,16 @@ def _resolve_langpair() -> Tuple[str, str]:
     if not source or not target:
         return DEFAULT_LANGPAIR_TUPLE
     return source, target
+
+
+def _is_valid_word(word: str) -> bool:
+    """Return ``True`` when the word looks like an English word or phrase."""
+
+    cleaned = word.strip()
+    if not cleaned:
+        return False
+
+    return bool(_WORD_VALIDATION_RE.match(cleaned))
 
 
 def _format_lang_for_google(code: str) -> str:
@@ -249,6 +260,9 @@ def lookup() -> Response:
     if not word:
         return jsonify({"status": "empty", "translation": ""}), 200
 
+    if not _is_valid_word(word):
+        return jsonify({"status": "invalid", "translation": ""}), 200
+
     translations = lookup_translation(word)
     if translations:
         joined = "；".join(translations)
@@ -276,7 +290,11 @@ def add_entry_route() -> str:
         flash("請提供單字和解釋，才能新增！", "error")
         return redirect(url_for("index"))
 
-    if lookup_state in {"warning", "error"}:
+    if not _is_valid_word(word):
+        flash("請輸入有效的英文單字或片語（僅限英文字母、空格、連字符或撇號）。", "error")
+        return redirect(url_for("index"))
+
+    if lookup_state in {"warning", "error", "invalid"}:
         flash("查無此單字，請檢查拼字後再試。", "error")
         return redirect(url_for("index"))
 
