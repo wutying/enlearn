@@ -270,16 +270,54 @@ def add_entry_route() -> str:
     word = request.form.get("word", "").strip()
     definition = request.form.get("definition", "").strip()
     context = request.form.get("context", "").strip()
+    lookup_state = request.form.get("lookup_state", "").strip()
 
     if not word or not definition:
         flash("請提供單字和解釋，才能新增！", "error")
         return redirect(url_for("index"))
+
+    if lookup_state in {"warning", "error"}:
+        flash("查無此單字，請檢查拼字後再試。", "error")
+        return redirect(url_for("index"))
+
+    if lookup_state == "loading":
+        flash("請等待翻譯查詢完成後再新增。", "info")
+        return redirect(url_for("index"))
+
+    if lookup_state != "success":
+        translations = lookup_translation(word)
+        if not translations:
+            flash("查無此單字，請檢查拼字後再試。", "error")
+            return redirect(url_for("index"))
 
     entries = store.load()
     entries.append(create_entry(word, definition, context))
     store.save(entries)
     flash(f"已新增單字 {word}：{definition}", "success")
     return redirect(url_for("index"))
+
+
+@app.post("/vocab/<entry_id>/delete")
+def delete_entry(entry_id: str) -> str:
+    store = get_store()
+    entries = store.load()
+    remaining = []
+    removed_entry = None
+
+    for entry in entries:
+        if entry.get("id") == entry_id:
+            removed_entry = entry
+        else:
+            remaining.append(entry)
+
+    if removed_entry is None:
+        flash("找不到要刪除的單字，可能已被移除。", "error")
+        return redirect(url_for("vocab_book"))
+
+    store.save(remaining)
+    word = removed_entry.get("word") or ""
+    flash(f"已刪除單字 {word}", "info")
+    return redirect(url_for("vocab_book"))
 
 
 @app.get("/review")

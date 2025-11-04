@@ -327,13 +327,14 @@ textarea {
 }
 
 .vocab-item__header h3 {
-  margin: 0 0 0.4rem 0;
+  margin: 0;
 }
 
 .vocab-item__meta {
   margin: 0;
   color: var(--muted);
-  font-size: 0.9rem;
+  font-size: 0.78rem;
+  opacity: 0.75;
 }
 
 .vocab-item__body {
@@ -342,43 +343,49 @@ textarea {
   gap: 0.75rem;
 }
 
-.definition-block {
-  display: grid;
-  gap: 0.5rem;
-}
-
-.definition-preview {
-  line-height: 1.6;
-  max-height: 4.8em;
-  overflow: hidden;
-  display: -webkit-box;
-  -webkit-line-clamp: 3;
-  -webkit-box-orient: vertical;
-}
-
-.definition-preview[data-expanded="true"] {
-  max-height: none;
-  -webkit-line-clamp: unset;
-}
-
-.definition-toggle {
-  justify-self: start;
-  border: none;
-  background: transparent;
-  color: var(--accent);
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.definition-toggle:hover,
-.definition-toggle:focus {
-  text-decoration: underline;
-}
-
 .vocab-item__context {
   margin: 0;
   color: var(--muted);
   font-style: italic;
+}
+
+.vocab-item__title h3 {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  align-items: baseline;
+}
+
+.vocab-item__word {
+  font-size: 1.15rem;
+}
+
+.vocab-item__definition {
+  color: var(--muted);
+  font-weight: 500;
+}
+
+.vocab-item__actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.inline-form {
+  margin: 0;
+}
+
+.inline-form button {
+  padding: 0.4rem 0.8rem;
+}
+
+.btn-link--danger {
+  color: var(--error);
+}
+
+.btn-link--danger:hover,
+.btn-link--danger:focus {
+  color: #b91c1c;
 }
 
 .review-mode-toggle {
