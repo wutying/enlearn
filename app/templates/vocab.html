@@ -68,8 +68,10 @@
         return;
       }
 
-      const queueSpeech = (segments) => {
-        if (!segments.length) {
+      let activeQueueToken = 0;
+
+      const queueSpeech = (segments, token) => {
+        if (!segments.length || token !== activeQueueToken) {
           return;
         }
 
@@ -82,12 +84,28 @@
           utterance.rate = rate;
         }
         utterance.onend = () => {
-          queueSpeech(rest);
+          if (token !== activeQueueToken) {
+            return;
+          }
+          queueSpeech(rest, token);
         };
         utterance.onerror = () => {
-          queueSpeech(rest);
+          if (token !== activeQueueToken) {
+            return;
+          }
+          queueSpeech(rest, token);
         };
         window.speechSynthesis.speak(utterance);
+      };
+
+      const startSpeechQueue = (segments) => {
+        if (!segments.length) {
+          return;
+        }
+        window.speechSynthesis.cancel();
+        activeQueueToken += 1;
+        const token = activeQueueToken;
+        queueSpeech(segments, token);
       };
 
       const extractDefinitions = (raw) => {
@@ -128,8 +146,7 @@
         if (!segments.length) {
           return;
         }
-        window.speechSynthesis.cancel();
-        queueSpeech(segments);
+        startSpeechQueue(segments);
       };
 
       document.querySelectorAll('.speak-button').forEach((button) => {
@@ -152,8 +169,7 @@
           if (!segments.length) {
             return;
           }
-          window.speechSynthesis.cancel();
-          queueSpeech(segments);
+          startSpeechQueue(segments);
         });
       }
     })();
