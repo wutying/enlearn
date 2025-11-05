@@ -122,7 +122,8 @@
         return parts.slice(0, 2);
       };
 
-      const buildSegmentsForEntry = (element) => {
+      const buildSegmentsForEntry = (element, options = {}) => {
+        const { includeDefinitions = true, wordRepeatRates = [0.95, 0.5, 0.95] } = options;
         const word = (element.dataset.word || '').trim();
         const definitionRaw = (element.dataset.definition || '').trim();
         if (!word && !definitionRaw) {
@@ -130,19 +131,20 @@
         }
         const segments = [];
         if (word) {
-          const rates = [0.95, 0.8, 0.95];
-          rates.forEach((rate) => {
+          wordRepeatRates.forEach((rate) => {
             segments.push({ text: word, lang: 'en-US', rate });
           });
         }
-        extractDefinitions(definitionRaw).forEach((definition) => {
-          segments.push({ text: definition, lang: 'zh-TW', rate: 1 });
-        });
+        if (includeDefinitions) {
+          extractDefinitions(definitionRaw).forEach((definition) => {
+            segments.push({ text: definition, lang: 'zh-TW', rate: 1 });
+          });
+        }
         return segments;
       };
 
-      const speakEntry = (element) => {
-        const segments = buildSegmentsForEntry(element);
+      const speakEntry = (element, options) => {
+        const segments = buildSegmentsForEntry(element, options);
         if (!segments.length) {
           return;
         }
@@ -153,7 +155,7 @@
         button.addEventListener('click', () => {
           const container = button.closest('.vocab-item');
           if (container) {
-            speakEntry(container);
+            speakEntry(container, { includeDefinitions: false, wordRepeatRates: [1] });
           }
         });
       });
