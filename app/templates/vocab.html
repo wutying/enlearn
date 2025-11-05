@@ -108,37 +108,12 @@
         queueSpeech(segments, token);
       };
 
-      const extractDefinitions = (raw) => {
-        if (!raw) {
-          return [];
-        }
-        const parts = raw
-          .split(/[；;,，]/)
-          .map((part) => part.trim())
-          .filter(Boolean);
-        if (!parts.length && raw.trim()) {
-          parts.push(raw.trim());
-        }
-        return parts.slice(0, 2);
-      };
-
       const buildSegmentsForEntry = (element) => {
         const word = (element.dataset.word || '').trim();
-        const definitionRaw = (element.dataset.definition || '').trim();
-        if (!word && !definitionRaw) {
+        if (!word) {
           return [];
         }
-        const segments = [];
-        if (word) {
-          const rates = [0.95, 0.8, 0.95];
-          rates.forEach((rate) => {
-            segments.push({ text: word, lang: 'en-US', rate });
-          });
-        }
-        extractDefinitions(definitionRaw).forEach((definition) => {
-          segments.push({ text: definition, lang: 'zh-TW', rate: 1 });
-        });
-        return segments;
+        return [{ text: word, lang: 'en-US', rate: 0.95 }];
       };
 
       const speakEntry = (element) => {
