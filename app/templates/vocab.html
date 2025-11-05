@@ -68,8 +68,15 @@
         return;
       }
 
-      const queueSpeech = (segments) => {
-        if (!segments.length) {
+      let activeQueueId = 0;
+
+      const stopSpeech = () => {
+        activeQueueId += 1;
+        window.speechSynthesis.cancel();
+      };
+
+      const queueSpeech = (segments, queueId) => {
+        if (!segments.length || queueId !== activeQueueId) {
           return;
         }
 
@@ -82,12 +89,21 @@
           utterance.rate = rate;
         }
         utterance.onend = () => {
-          queueSpeech(rest);
+          queueSpeech(rest, queueId);
         };
         utterance.onerror = () => {
-          queueSpeech(rest);
+          queueSpeech(rest, queueId);
         };
         window.speechSynthesis.speak(utterance);
+      };
+
+      const startSpeechQueue = (segments) => {
+        stopSpeech();
+        if (!segments.length) {
+          return;
+        }
+        const queueId = activeQueueId;
+        queueSpeech(segments, queueId);
       };
 
       const extractDefinitions = (raw) => {
@@ -123,21 +139,20 @@
         return segments;
       };
 
-      const speakEntry = (element) => {
-        const segments = buildSegmentsForEntry(element);
-        if (!segments.length) {
-          return;
-        }
-        window.speechSynthesis.cancel();
-        queueSpeech(segments);
-      };
-
       document.querySelectorAll('.speak-button').forEach((button) => {
         button.addEventListener('click', () => {
-          const container = button.closest('.vocab-item');
-          if (container) {
-            speakEntry(container);
-          }
+          const word = (button.dataset.word || '').trim();
+          startSpeechQueue(
+            word
+              ? [
+                  {
+                    text: word,
+                    lang: 'en-US',
+                    rate: 0.95,
+                  },
+                ]
+              : []
+          );
         });
       });
 
@@ -152,8 +167,7 @@
           if (!segments.length) {
             return;
           }
-          window.speechSynthesis.cancel();
-          queueSpeech(segments);
+          startSpeechQueue(segments);
         });
       }
     })();
