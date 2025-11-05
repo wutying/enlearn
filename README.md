@@ -102,6 +102,14 @@ This project gives you a **隨身單字本** that works both as a friendly web a
 
    如果你使用的是 Windows PowerShell，指令一樣，只是確保前一步已成功啟用虛擬環境。
 
+   - **想要從外部網路連線？** 將監聽位址改成所有網卡，並明確指定埠號：
+
+     ```bash
+     flask --app app.app --debug run --host 0.0.0.0 --port 5000
+     ```
+
+     這會讓 Flask 在所有可用的網路介面上提供 5000 埠服務，方便你搭配路由器的 Port Forwarding 或 VPN 讓其他裝置連入。請同時確保作業系統防火牆與網路設備已開放 5000 埠，並留意外部公開服務的安全性。
+
 7. **開啟瀏覽器**：造訪 <http://127.0.0.1:5000> 或 <http://localhost:5000>。
 
    - 左側卡片輸入單字時會即時查詢翻譯，確認後即可儲存。
