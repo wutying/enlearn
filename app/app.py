@@ -1,14 +1,9 @@
 """Flask web application for capturing and reviewing vocabulary."""
 from __future__ import annotations
 
-import functools
-import json
 import os
-import re
-from html import unescape
 from pathlib import Path
-from typing import List, Optional, Tuple
-from urllib import error, parse, request as urlrequest
+from typing import List
 
 from flask import (
     Flask,
@@ -21,30 +16,22 @@ from flask import (
     url_for,
 )
 
-from vocab import (
-    DEFAULT_STORAGE,
-    VocabularyStore,
-    create_entry,
-    get_due_entries,
-    sort_entries,
-    update_review_state,
+from vocab import DEFAULT_STORAGE, VocabularyStore, get_due_entries, sort_entries
+from vocab.services import (
+    DEFAULT_TRANSLATION_LANGPAIR,
+    add_vocab_entry,
+    delete_vocab_entry,
+    is_valid_word,
+    load_entries,
+    lookup_translation,
+    lookup_translation_details,
+    record_review_result,
+    resolve_langpair,
+    summarize_reviews,
 )
 
 app = Flask(__name__)
 app.config["SECRET_KEY"] = "enlearn-secret-key"  # Needed for flashing messages
-
-TRANSLATION_ENDPOINT = "https://translate.googleapis.com/translate_a/single"
-TRANSLATION_TIMEOUT = 6  # seconds
-DEFAULT_TRANSLATION_LANGPAIR = "EN|ZH-TW"
-DEFAULT_LANGPAIR_TUPLE: Tuple[str, str] = tuple(
-    DEFAULT_TRANSLATION_LANGPAIR.split("|")
-)
-# Accept ISO-639 two/three letter language codes with an optional region/script
-# segment (e.g. ``EN``, ``EN-US``, ``ZH-TW``, ``SR-LATN``). Wider values such as
-# ``AUTO`` are rejected so we can gracefully fall back to the safe default.
-_LANG_CODE_RE = re.compile(r"^[A-Za-z]{2,3}(?:-[A-Za-z0-9]{2,8})?$")
-_WORD_VALIDATION_RE = re.compile(r"^[A-Za-z][A-Za-z\s'-]*$")
-
 
 app.config["TRANSLATION_LANGPAIR"] = os.environ.get(
     "TRANSLATION_LANGPAIR", DEFAULT_TRANSLATION_LANGPAIR
@@ -56,216 +43,15 @@ def get_store() -> VocabularyStore:
     return VocabularyStore(storage_path)
 
 
-def _normalize_translation(raw: Optional[str], original: str) -> Optional[str]:
-    if not raw:
-        return None
-    cleaned = raw.strip()
-    if not cleaned:
-        return None
-    if cleaned.casefold() == original.casefold():
-        # Some providers echo the source text when no translation is found.
-        return None
-    return cleaned
-
-
-def _sanitize_lang_code(code: str) -> Optional[str]:
-    code = code.strip()
-    if not code:
-        return None
-
-    match = _LANG_CODE_RE.match(code)
-    if not match:
-        return None
-
-    primary, _, rest = code.partition("-")
-    primary = primary.upper()
-    # ``_LANG_CODE_RE`` already guarantees 2-3 characters for the primary tag,
-    # but we keep the explicit guard to make the intent obvious and future-
-    # proof the check should the regex change.
-    if len(primary) not in (2, 3):
-        return None
-
-    if not rest:
-        return primary
-
-    return f"{primary}-{rest.upper()}"
-
-
-def _resolve_langpair() -> Tuple[str, str]:
+def _resolve_langpair() -> tuple[str, str]:
     raw = str(app.config.get("TRANSLATION_LANGPAIR", DEFAULT_TRANSLATION_LANGPAIR))
-    segments = raw.split("|")
-    if len(segments) != 2:
-        return DEFAULT_LANGPAIR_TUPLE
-    source = _sanitize_lang_code(segments[0])
-    target = _sanitize_lang_code(segments[1])
-    if not source or not target:
-        return DEFAULT_LANGPAIR_TUPLE
-    return source, target
-
-
-def _is_valid_word(word: str) -> bool:
-    """Return ``True`` when the word looks like an English word or phrase."""
-
-    cleaned = word.strip()
-    if not cleaned:
-        return False
-
-    return bool(_WORD_VALIDATION_RE.match(cleaned))
-
-
-def _format_lang_for_google(code: str) -> str:
-    primary, _, rest = code.partition("-")
-    primary = primary.lower()
-    if rest:
-        return f"{primary}-{rest.lower()}"
-    return primary
-
-
-def _fetch_translation_payload(word: str, langpair: Tuple[str, str]) -> Optional[dict]:
-    source, target = langpair
-    params = {
-        "client": "gtx",
-        "sl": _format_lang_for_google(source),
-        "tl": _format_lang_for_google(target),
-        "dj": "1",
-        "dt": ["t", "bd", "md", "at", "ex"],
-        "q": word,
-    }
-    # ``urlencode`` cannot encode list values by default, so we manually expand them.
-    query_parts: List[Tuple[str, str]] = []
-    for key, value in params.items():
-        if isinstance(value, list):
-            for item in value:
-                query_parts.append((key, item))
-        else:
-            query_parts.append((key, value))
-    url = f"{TRANSLATION_ENDPOINT}?{parse.urlencode(query_parts)}"
-    req = urlrequest.Request(
-        url,
-        headers={"User-Agent": "enlearn-vocab-app/1.0"},
-    )
-
-    try:
-        with urlrequest.urlopen(req, timeout=TRANSLATION_TIMEOUT) as resp:
-            payload = resp.read()
-    except (error.URLError, TimeoutError, ValueError, OSError):
-        return None
-
-    try:
-        data = json.loads(payload)
-    except json.JSONDecodeError:
-        return None
-
-    if isinstance(data, dict):
-        return data
-    return None
-
-
-def _extract_translations(data: dict, original: str) -> List[str]:
-    results: List[str] = []
-
-    def add(value: Optional[str]) -> None:
-        normalized = _normalize_translation(value, original)
-        if normalized and normalized not in results:
-            results.append(normalized)
-
-    sentences = data.get("sentences")
-    if isinstance(sentences, list):
-        for sentence in sentences:
-            if isinstance(sentence, dict):
-                add(sentence.get("trans"))
-            elif isinstance(sentence, list) and sentence:
-                add(str(sentence[0]))
-
-    dictionary_entries = data.get("dict")
-    if isinstance(dictionary_entries, list):
-        for entry in dictionary_entries:
-            if not isinstance(entry, dict):
-                continue
-            terms = entry.get("terms")
-            if isinstance(terms, list):
-                for term in terms:
-                    add(str(term))
-            entry_terms = entry.get("entry")
-            if isinstance(entry_terms, list):
-                for item in entry_terms:
-                    if isinstance(item, dict):
-                        add(item.get("word"))
-
-    alternative_translations = data.get("alternative_translations")
-    if isinstance(alternative_translations, list):
-        for alt in alternative_translations:
-            if not isinstance(alt, dict):
-                continue
-            entries = alt.get("entries")
-            if isinstance(entries, list):
-                for entry in entries:
-                    if isinstance(entry, dict):
-                        add(entry.get("word"))
-
-    return results
-
-
-def _strip_html_tags(text: str) -> str:
-    return re.sub(r"<[^>]+>", "", text)
-
-
-def _extract_examples(data: dict) -> List[str]:
-    results: List[str] = []
-
-    examples_section = data.get("examples")
-    if isinstance(examples_section, dict):
-        items = examples_section.get("example")
-        if isinstance(items, list):
-            for item in items:
-                if not isinstance(item, dict):
-                    continue
-                raw = item.get("text")
-                if not isinstance(raw, str):
-                    continue
-                cleaned = unescape(_strip_html_tags(raw)).strip()
-                if cleaned and cleaned not in results:
-                    results.append(cleaned)
-
-    return results
-
-
-@functools.lru_cache(maxsize=256)
-def _lookup_translation_data_cached(sanitized_word: str) -> Optional[dict]:
-    langpair = _resolve_langpair()
-    data = _fetch_translation_payload(sanitized_word, langpair)
-    if not data and langpair != DEFAULT_LANGPAIR_TUPLE:
-        data = _fetch_translation_payload(sanitized_word, DEFAULT_LANGPAIR_TUPLE)
-    return data
-
-
-def _get_translation_data(word: str) -> Optional[dict]:
-    sanitized = word.strip()
-    if not sanitized:
-        return None
-    return _lookup_translation_data_cached(sanitized)
-
-
-@functools.lru_cache(maxsize=256)
-def lookup_translation(word: str) -> Optional[List[str]]:
-    """Fetch a translation for ``word`` from the external API."""
-
-    sanitized = word.strip()
-    if not sanitized:
-        return None
-
-    data = _get_translation_data(sanitized)
-    if not data:
-        return None
-
-    translations = _extract_translations(data, sanitized)
-    return translations or None
+    return resolve_langpair(raw)
 
 
 @app.get("/")
 def index() -> str:
     store = get_store()
-    entries = store.load()
+    entries = load_entries(store)
     due_entries = get_due_entries(entries)
     return render_template(
         "index.html",
@@ -278,7 +64,7 @@ def index() -> str:
 @app.get("/vocab")
 def vocab_book() -> str:
     store = get_store()
-    entries = store.load()
+    entries = load_entries(store)
     sorted_entries = sort_entries(entries)
     due_entries = get_due_entries(entries)
     return render_template(
@@ -297,35 +83,48 @@ def lookup() -> Response:
     if not word:
         return jsonify({"status": "empty", "translation": "", "examples": []}), 200
 
-    if not _is_valid_word(word):
+    if not is_valid_word(word):
         return jsonify({"status": "invalid", "translation": "", "examples": []}), 200
 
-    data = _get_translation_data(word)
-    if not data:
+    details = lookup_translation_details(word, langpair=_resolve_langpair())
+    if not details:
         return jsonify({"status": "not_found", "translation": "", "examples": []}), 200
 
-    translations = _extract_translations(data, word)
-    examples = _extract_examples(data)
+    translations = details.get("translations") or []
+    examples = details.get("examples") or []
     if translations:
         joined = "；".join(translations)
         return (
-            jsonify({
-                "status": "ok",
-                "translation": joined,
-                "meanings": translations,
-                "examples": examples[:5],
-            }),
+            jsonify(
+                {
+                    "status": "ok",
+                    "translation": joined,
+                    "meanings": translations,
+                    "examples": examples[:5],
+                }
+            ),
             200,
         )
 
     return (
-        jsonify({
-            "status": "not_found",
-            "translation": "",
-            "examples": examples[:5],
-        }),
+        jsonify({"status": "not_found", "translation": "", "examples": examples[:5]}),
         200,
     )
+
+
+@app.get("/api/v1/lookup")
+def api_lookup() -> Response:
+    word = request.args.get("word", "").strip()
+    if not word:
+        return jsonify({"error": "empty", "message": "word is required"}), 400
+    if not is_valid_word(word):
+        return jsonify({"error": "invalid", "message": "word format is invalid"}), 400
+
+    details = lookup_translation_details(word, langpair=_resolve_langpair())
+    if not details:
+        return jsonify({"error": "not_found", "message": "no translation found"}), 404
+
+    return jsonify({"word": word, **details}), 200
 
 
 @app.post("/add")
@@ -340,7 +139,7 @@ def add_entry_route() -> str:
         flash("請提供單字和解釋，才能新增！", "error")
         return redirect(url_for("index"))
 
-    if not _is_valid_word(word):
+    if not is_valid_word(word):
         flash("請輸入有效的英文單字或片語（僅限英文字母、空格、連字符或撇號）。", "error")
         return redirect(url_for("index"))
 
@@ -358,9 +157,7 @@ def add_entry_route() -> str:
             flash("查無此單字，請檢查拼字後再試。", "error")
             return redirect(url_for("index"))
 
-    entries = store.load()
-    entries.append(create_entry(word, definition, context))
-    store.save(entries)
+    add_vocab_entry(store, word, definition, context)
     flash(f"已新增單字 {word}：{definition}", "success")
     return redirect(url_for("index"))
 
@@ -368,30 +165,68 @@ def add_entry_route() -> str:
 @app.post("/vocab/<entry_id>/delete")
 def delete_entry(entry_id: str) -> str:
     store = get_store()
-    entries = store.load()
-    remaining = []
-    removed_entry = None
-
-    for entry in entries:
-        if entry.get("id") == entry_id:
-            removed_entry = entry
-        else:
-            remaining.append(entry)
+    removed_entry = delete_vocab_entry(store, entry_id)
 
     if removed_entry is None:
         flash("找不到要刪除的單字，可能已被移除。", "error")
         return redirect(url_for("vocab_book"))
-
-    store.save(remaining)
     word = removed_entry.get("word") or ""
     flash(f"已刪除單字 {word}", "info")
     return redirect(url_for("vocab_book"))
 
 
+# ----- JSON APIs for local network clients ---------------------------------
+
+
+def _load_sorted_entries(store: VocabularyStore) -> List[dict]:
+    entries = load_entries(store)
+    return sort_entries(entries)
+
+
+@app.get("/api/v1/vocab")
+def api_list_vocab() -> Response:
+    store = get_store()
+    entries = _load_sorted_entries(store)
+    stats = summarize_reviews(entries)
+    return jsonify({"entries": entries, **stats}), 200
+
+
+@app.post("/api/v1/vocab")
+def api_add_vocab() -> Response:
+    store = get_store()
+    payload = request.get_json(silent=True) or {}
+    word = str(payload.get("word", "")).strip()
+    definition = str(payload.get("definition", "")).strip()
+    context = str(payload.get("context", "")).strip()
+
+    if not word or not definition:
+        return (
+            jsonify({"error": "missing_fields", "message": "word and definition are required"}),
+            400,
+        )
+
+    if not is_valid_word(word):
+        return jsonify({"error": "invalid_word", "message": "word format is invalid"}), 400
+
+    entry = add_vocab_entry(store, word, definition, context)
+    stats = summarize_reviews(load_entries(store))
+    return jsonify({"entry": entry, **stats}), 201
+
+
+@app.delete("/api/v1/vocab/<entry_id>")
+def api_delete_vocab(entry_id: str) -> Response:
+    store = get_store()
+    removed = delete_vocab_entry(store, entry_id)
+    if removed is None:
+        return jsonify({"error": "not_found", "message": "entry does not exist"}), 404
+    stats = summarize_reviews(load_entries(store))
+    return jsonify({"deleted": entry_id, **stats}), 200
+
+
 @app.get("/review")
 def review() -> str:
     store = get_store()
-    entries = store.load()
+    entries = load_entries(store)
     due_entries = get_due_entries(entries)
     mode = request.args.get("mode", "").strip()
     if mode not in {"word-first", "definition-first"}:
@@ -422,24 +257,22 @@ def review_result(entry_id: str) -> str:
     remembered = result == "remembered"
 
     store = get_store()
-    entries = store.load()
-    target_entry = None
-    for entry in entries:
-        if entry.get("id") == entry_id:
-            target_entry = entry
-            if mode == "definition-first":
-                answer = request.form.get("answer", "").strip()
-                if answer:
-                    remembered = answer.casefold() == entry.get("word", "").casefold()
-            break
-    else:
+    answer = request.form.get("answer", "").strip()
+    target_entry = record_review_result(
+        store,
+        entry_id,
+        remembered=remembered,
+        answer=answer or None,
+        mode=mode,
+    )
+
+    if target_entry is None:
         flash("找不到這個單字，可能已被刪除。", "error")
         return redirect(url_for("review", mode=mode))
 
-    update_review_state(target_entry, remembered=remembered)
-    store.save(entries)
-
     if mode == "definition-first":
+        if answer:
+            remembered = answer.casefold() == str(target_entry.get("word", "")).casefold()
         if remembered:
             flash(
                 f"回答正確！已累積複習 {target_entry['review_count']} 次。",
@@ -471,6 +304,49 @@ def review_skip(entry_id: str) -> str:
     mode = request.form.get("mode", "word-first")
     flash("已跳過此單字，下次再試！", "info")
     return redirect(url_for("review", mode=mode))
+
+
+@app.get("/api/v1/review")
+def api_get_review() -> Response:
+    store = get_store()
+    entries = load_entries(store)
+    due_entries = get_due_entries(entries)
+    next_entry = due_entries[0] if due_entries else None
+    stats = summarize_reviews(entries)
+    return jsonify({"next": next_entry, "due_entries": due_entries, **stats}), 200
+
+
+@app.post("/api/v1/review/<entry_id>")
+def api_post_review(entry_id: str) -> Response:
+    store = get_store()
+    payload = request.get_json(silent=True) or {}
+    mode = str(payload.get("mode", "word-first")).strip() or "word-first"
+    if mode not in {"word-first", "definition-first"}:
+        return jsonify({"error": "invalid_mode", "message": "mode is not supported"}), 400
+
+    result = str(payload.get("result", "")).strip().lower()
+    if result not in {"remembered", "forgot"}:
+        return jsonify({"error": "invalid_result", "message": "result must be remembered or forgot"}), 400
+
+    remembered = result == "remembered"
+    answer = payload.get("answer")
+    if isinstance(answer, str):
+        answer = answer.strip() or None
+    else:
+        answer = None
+
+    updated = record_review_result(
+        store,
+        entry_id,
+        remembered=remembered,
+        answer=answer,
+        mode=mode,
+    )
+    if updated is None:
+        return jsonify({"error": "not_found", "message": "entry does not exist"}), 404
+
+    stats = summarize_reviews(load_entries(store))
+    return jsonify({"entry": updated, **stats}), 200
 
 
 if __name__ == "__main__":
