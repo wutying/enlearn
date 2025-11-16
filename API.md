@@ -1,6 +1,6 @@
 # API v1
 
-Minimal API surface for local network clients (e.g., iOS) to interact with the vocabulary storage and review scheduler. All endpoints return JSON.
+Minimal API surface for local network clients to interact with the vocabulary storage and review scheduler. All endpoints return JSON.
 
 Base URL when running locally: `http://<host>:5000/api/v1`
 
