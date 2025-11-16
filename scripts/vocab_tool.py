@@ -10,19 +10,13 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from vocab import (
-    DEFAULT_STORAGE,
-    VocabularyStore,
-    create_entry,
-    get_due_entries,
-    sort_entries,
-    update_review_state,
-)
+from vocab import DEFAULT_STORAGE, VocabularyStore, get_due_entries, sort_entries
+from vocab.services import add_vocab_entry, get_store, load_entries, record_review_result
 
 
-def load_entries(store: VocabularyStore) -> list[dict[str, object]]:
+def _load_entries_or_exit(store: VocabularyStore) -> list[dict[str, object]]:
     try:
-        return store.load()
+        return load_entries(store)
     except ValueError as exc:
         raise SystemExit(str(exc)) from exc
 
@@ -42,15 +36,12 @@ def add_entry(store: VocabularyStore, args: argparse.Namespace) -> None:
     if not args.word or not args.definition:
         raise SystemExit("add command requires WORD and DEFINITION arguments.")
 
-    entries = load_entries(store)
-    entry = create_entry(args.word, args.definition, args.context or "")
-    entries.append(entry)
-    store.save(entries)
+    entry = add_vocab_entry(store, args.word, args.definition, args.context or "")
     print(f"Added '{args.word}' to your vocabulary list. Next review: {entry['next_review']}")
 
 
 def list_entries(store: VocabularyStore, limit: int) -> None:
-    entries = load_entries(store)
+    entries = _load_entries_or_exit(store)
     if not entries:
         print("No vocabulary saved yet. Use the add command to capture a new word.")
         return
@@ -71,7 +62,7 @@ def list_entries(store: VocabularyStore, limit: int) -> None:
 
 
 def review_entries(store: VocabularyStore, limit: int) -> None:
-    entries = load_entries(store)
+    entries = _load_entries_or_exit(store)
     if not entries:
         print("Your list is empty. Add words first.")
         return
@@ -100,15 +91,14 @@ def review_entries(store: VocabularyStore, limit: int) -> None:
             break
         if response == "q":
             break
-        update_review_state(entry, remembered=response == "y")
+        record_review_result(store, entry["id"], remembered=response == "y")
         count += 1
 
-    store.save(entries)
     print("Review session complete. Keep going!")
 
 def main() -> None:
     args = parse_args()
-    store = VocabularyStore(args.storage)
+    store = get_store(args.storage)
     if args.command == "add":
         add_entry(store, args)
     elif args.command == "list":
