@@ -112,6 +112,34 @@ This project gives you a **隨身單字本** that works both as a friendly web a
 
 > 若要停止伺服器，在終端機按下 `Ctrl + C` 即可；下次使用時從步驟 4 重新啟用虛擬環境、再執行步驟 6。
 
+## 與 iOS APP 互通
+
+維持桌面版既有啟動流程（步驟 1～7），並將資料檔與 iOS APP 維持同步：
+
+- **Google Drive 設定**：
+  - 建議在桌面版啟動前，將 `VOCAB_STORAGE` 指向 Google Drive 同步資料夾中的 `vocab.json`，例如 `~/Google Drive/My Drive/enlearn/vocab.json`。
+  - 確認 Google Drive 桌面版已登入、完成首輪同步，並啟用「離線使用」。若使用公司帳號，確保該資料夾有權限與足夠儲存空間。
+- **啟動本機 API（如 iOS 需透過區網存取）**：
+  - 先依桌面步驟啟動 Flask：`flask --app app.app --debug run --host 0.0.0.0`。
+  - 在 iOS 裝置上以同一區網的 IP 存取，例如 `http://192.168.0.12:5000`。若需要 HTTPS，可透過 `ngrok` 或反向代理自行配置。
+  - 若 iOS APP 僅讀寫 Google Drive 而非呼叫本機 API，可省略此步，但仍需維持桌面端持續同步。
+- **常見同步問題排查**：
+  - 檔案權限：如無法寫入 `vocab.json`，確認 Google Drive 資料夾權限與磁碟空間。
+  - 檔案鎖定：桌面與 iOS 同時編輯可能觸發 Drive 衝突，建議一次只在單一裝置編輯，或在 Drive 介面解決衝突後再重新整理。
+  - 網路延遲：行動網路或跨區域同步較慢，可在 iOS 同步前手動刷新 Drive APP，或於桌面確認雲端圖示已完成上傳。
+  - 時區差異：複習排程與「下次複習時間」依儲存的 ISO 時間戳計算，請確保桌面與 iOS 使用正確的系統時區。
+
+### 端到端驗證清單
+
+1. **桌面新增 → Drive 同步 → iOS 可見**：在桌面新增單字後，確認 Google Drive 完成上傳，再在 iOS APP 重新整理或重新開啟取得最新列表。
+2. **iOS 新增 → Drive 同步 → 桌面可見**：在 iOS 新增或更新單字，等待 Drive 顯示同步完成，桌面再重新載入頁面或重新啟動伺服器確保讀取到最新檔案。
+3. **離線模式復原**：
+   - 桌面或 iOS 於離線時新增單字，保持 `vocab.json` 變更留在本機。
+   - 重新上線後，先讓 Drive 完成同步，再在另一端觸發重新整理（桌面重整頁面或 iOS 重新開啟 APP）。
+   - 若 Drive 出現衝突檔案，手動合併後保留最新的內容，必要時可用文字編輯器合併 JSON。
+
+> 需要設定 iOS 專案的 Bundle ID、Google OAuth Client ID 或 Xcode 初始化步驟，請參考 [iOS 開發環境需求與初始化指引](docs/ios_setup.md)。
+
 ## Command Line 使用方式（選擇性）
 
 CLI 使用同一份資料庫，適合在終端機或自動化腳本中操作。
