@@ -44,12 +44,26 @@ def load_entries(store: VocabularyStore) -> List[Dict[str, object]]:
 
 def add_vocab_entry(
     store: VocabularyStore, word: str, definition: str, context: str = ""
-) -> Dict[str, object]:
+) -> tuple[Dict[str, object], bool]:
+    """Add a new vocabulary entry or increment the count if it exists.
+
+    Returns a tuple of (entry, created) where ``created`` indicates whether a
+    new record was inserted.
+    """
+
     entries = load_entries(store)
+    normalized_word = word.casefold()
+    for entry in entries:
+        existing_word = entry.get("word")
+        if isinstance(existing_word, str) and existing_word.casefold() == normalized_word:
+            entry["addition_count"] = entry.get("addition_count", 1) + 1
+            store.save(entries)
+            return entry, False
+
     entry = create_entry(word, definition, context)
     entries.append(entry)
     store.save(entries)
-    return entry
+    return entry, True
 
 
 def delete_vocab_entry(
