@@ -36,8 +36,17 @@ def add_entry(store: VocabularyStore, args: argparse.Namespace) -> None:
     if not args.word or not args.definition:
         raise SystemExit("add command requires WORD and DEFINITION arguments.")
 
-    entry = add_vocab_entry(store, args.word, args.definition, args.context or "")
-    print(f"Added '{args.word}' to your vocabulary list. Next review: {entry['next_review']}")
+    entry, created = add_vocab_entry(store, args.word, args.definition, args.context or "")
+    if created:
+        print(
+            f"Added '{args.word}' to your vocabulary list. Next review: {entry['next_review']}"
+        )
+    else:
+        print(
+            "Word already existed. Incremented addition count to {count}.".format(
+                count=entry.get("addition_count")
+            )
+        )
 
 
 def list_entries(store: VocabularyStore, limit: int) -> None:

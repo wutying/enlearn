@@ -157,8 +157,14 @@ def add_entry_route() -> str:
             flash("查無此單字，請檢查拼字後再試。", "error")
             return redirect(url_for("index"))
 
-    add_vocab_entry(store, word, definition, context)
-    flash(f"已新增單字 {word}：{definition}", "success")
+    entry, created = add_vocab_entry(store, word, definition, context)
+    if created:
+        flash(f"已新增單字 {word}：{definition}", "success")
+    else:
+        flash(
+            f"單字 {word} 已在單字本中，已更新新增次數至 {entry['addition_count']}。",
+            "info",
+        )
     return redirect(url_for("index"))
 
 
@@ -208,9 +214,10 @@ def api_add_vocab() -> Response:
     if not is_valid_word(word):
         return jsonify({"error": "invalid_word", "message": "word format is invalid"}), 400
 
-    entry = add_vocab_entry(store, word, definition, context)
+    entry, created = add_vocab_entry(store, word, definition, context)
     stats = summarize_reviews(load_entries(store))
-    return jsonify({"entry": entry, **stats}), 201
+    status = "created" if created else "updated"
+    return jsonify({"entry": entry, "status": status, **stats}), 201 if created else 200
 
 
 @app.delete("/api/v1/vocab/<entry_id>")

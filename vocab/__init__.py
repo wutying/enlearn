@@ -73,6 +73,10 @@ def normalize_entries(entries: Iterable[Dict[str, Any]]) -> bool:
         if "review_count" not in entry:
             entry["review_count"] = 0
             changed = True
+        if "addition_count" not in entry:
+            # Track how many times the user attempted to add the word.
+            entry["addition_count"] = 1
+            changed = True
     return changed
 
 
@@ -88,6 +92,7 @@ def create_entry(word: str, definition: str, context: str = "", now: datetime | 
         "interval_days": 1,
         "success_streak": 0,
         "review_count": 0,
+        "addition_count": 1,
     }
 
 
